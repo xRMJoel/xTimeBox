@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify your identity</title>
+</head>
+<body style="margin:0;padding:0;background-color:#070d1f;font-family:'Nunito Sans',Arial,sans-serif;color:#dfe4fe;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#070d1f;min-height:100vh;">
+    <tr>
+      <td align="center" style="padding:40px 20px;">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+
+          <!-- Logo -->
+          <tr>
+            <td align="center" style="padding-bottom:32px;">
+              <img src="{{ .SiteURL }}/logo.png" alt="xTimeBox" height="40" style="height:40px;display:block;" />
+            </td>
+          </tr>
+
+          <!-- Card -->
+          <tr>
+            <td style="background:rgba(17,25,46,0.95);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:40px 36px;">
+
+              <!-- Icon -->
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px auto;">
+                <tr>
+                  <td align="center" style="width:56px;height:56px;border-radius:50%;background:rgba(250,204,21,0.08);border:1px solid rgba(250,204,21,0.15);text-align:center;vertical-align:middle;">
+                    <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyOCIgaGVpZ2h0PSIyOCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmYWNjMTUiIHN0cm9rZS13aWR0aD0iMS44IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxwYXRoIGQ9Ik0xMiAyMnM4LTQgOC0xMFY1bC04LTMtOCAzdjdjMCA2IDggMTAgOCAxMHoiLz48L3N2Zz4=" alt="" width="28" height="28" style="display:block;margin:0 auto;" />
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Heading -->
+              <h1 style="margin:0 0 12px 0;font-family:'Montserrat',Arial,sans-serif;font-size:24px;font-weight:900;color:#ffffff;text-align:center;letter-spacing:-0.02em;">
+                Verify your identity
+              </h1>
+
+              <!-- Body -->
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:#a5aac2;text-align:center;">
+                You're about to do something that needs a quick identity check. Enter the code below in xTimeBox to continue.
+              </p>
+
+              <!-- OTP Code -->
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px auto;">
+                <tr>
+                  <td align="center" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:20px 40px;">
+                    <p style="margin:0;font-family:'Montserrat',monospace;font-size:32px;font-weight:900;color:#ffffff;letter-spacing:0.3em;">
+                      {{ .Token }}
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Note -->
+              <p style="margin:0;font-size:13px;line-height:1.5;color:#6f758b;text-align:center;">
+                This code expires in 10 minutes. If you didn't initiate this, you can safely ignore this email.
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding-top:32px;text-align:center;">
+              <p style="margin:0 0 16px 0;font-size:12px;color:#6f758b;line-height:1.5;">
+                You received this email because a sensitive action was initiated on your xTimeBox account.<br />
+                If that wasn't you, consider changing your password.
+              </p>
+              <p style="margin:0;font-size:11px;color:#4a4f63;line-height:1.5;">
+                xTimeBox is a product of xRM 365 Ltd. All rights reserved.<br />
+                This is an automated message &mdash; please do not reply directly to this email.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

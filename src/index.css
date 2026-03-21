@@ -1,0 +1,269 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Smooth rendering */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Material Symbols */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* ── Stitch background system ── */
+body {
+  background-color: #070d1f;
+  color: #dfe4fe;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+/* Grid background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(102, 211, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(102, 211, 255, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Celestial glow */
+body::after {
+  content: '';
+  position: fixed;
+  top: -200px;
+  right: -200px;
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(circle, rgba(0,201,255,0.15) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Glass card utilities ── */
+.glass-card {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-card-inset {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Gradient-accented glass card (like the New Entry quick action) */
+.glass-card-accent {
+  background: linear-gradient(135deg, rgba(0,201,255,0.10) 0%, rgba(123,47,219,0.10) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0,201,255,0.20);
+  box-shadow: 0 4px 24px rgba(0,201,255,0.08);
+}
+
+/* Subtle glow border (no background tint, just the gradient edge) */
+.glass-card-glow {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0,201,255,0.15);
+  box-shadow: 0 2px 16px rgba(0,201,255,0.06);
+}
+
+/* Gradient icon badge (small square icon container) */
+.icon-badge-gradient {
+  background: linear-gradient(135deg, #00C9FF 0%, #7B2FDB 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Legacy compat */
+.glass {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+.glass-sm {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+}
+
+/* ── Gradient utilities ── */
+.signature-gradient-text {
+  background: linear-gradient(135deg, #00C9FF, #7B2FDB);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #00C9FF, #7B2FDB);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.signature-gradient-bg {
+  background: linear-gradient(135deg, #00C9FF, #7B2FDB);
+}
+
+/* ── Gradient button ── */
+.btn-gradient {
+  background: linear-gradient(135deg, #00C9FF, #7B2FDB);
+  box-shadow: 0 0 20px rgba(0,201,255,0.3);
+  color: white;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  transition: all 0.25s;
+  cursor: pointer;
+  padding: 0.65rem 1.5rem;
+}
+
+.btn-gradient:hover {
+  box-shadow: 0 0 40px rgba(0,201,255,0.4);
+  transform: scale(1.02);
+}
+
+.btn-gradient:active {
+  transform: scale(0.98);
+}
+
+.btn-gradient:disabled {
+  background: #334155;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Dark input styling ── */
+.input-dark {
+  padding: 0.65rem 0.85rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: #dfe4fe;
+  background: rgba(255, 255, 255, 0.05);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+}
+
+.input-dark::placeholder {
+  color: #41475b;
+}
+
+.input-dark:focus {
+  outline: none;
+  border-color: #66d3ff;
+  box-shadow: 0 0 0 3px rgba(102,211,255,0.1);
+}
+
+/* Select arrow override */
+select.input-dark {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236f758b' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2rem;
+}
+
+select.input-dark option {
+  background: #11192e;
+  color: #dfe4fe;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #41475b;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #6f758b;
+}
+
+/* ── Toggle switch ── */
+.toggle-switch {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: #1c253e;
+  border-radius: 24px;
+  transition: background 0.25s;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background: #6f758b;
+  border-radius: 50%;
+  transition: transform 0.25s, background 0.25s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: rgba(102,211,255,0.25);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(18px);
+  background: #66d3ff;
+}
+
+/* ── Animations ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease;
+}
