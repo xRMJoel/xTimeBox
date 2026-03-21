@@ -80,12 +80,15 @@ export function AuthProvider({ children }) {
     return data
   }
 
-  // Sign out
+  // Sign out — always clear local state, even if the session is already dead
   async function signOut() {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
     setSession(null)
     setProfile(null)
+    try {
+      await supabase.auth.signOut()
+    } catch (err) {
+      console.warn('Sign out error (session may have expired):', err.message)
+    }
   }
 
   // Update password (for first-time invite users)
