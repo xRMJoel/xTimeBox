@@ -130,10 +130,9 @@ export function useEntries() {
         .update(updates)
         .eq('id', entryId)
         .select()
-        .single()
 
       if (err) throw err
-      return data
+      return data?.[0] || null
     } catch (e) {
       setError(e.message)
       throw e

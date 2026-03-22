@@ -98,39 +98,22 @@ export function AuthProvider({ children }) {
     return data
   }
 
-  // Update profile (with upsert fallback if profile row doesn't exist yet)
+  // Update profile
   async function updateProfile(updates) {
     const userId = session?.user?.id
     if (!userId) throw new Error('No authenticated user')
 
-    // Try update first
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('profiles')
       .update(updates)
       .eq('id', userId)
-      .select()
-      .single()
-
-    // If no row found, the trigger may not have created one — insert instead
-    if (error && error.code === 'PGRST116') {
-      const { data: inserted, error: insertErr } = await supabase
-        .from('profiles')
-        .upsert({
-          id: userId,
-          email: session.user.email,
-          ...updates,
-        })
-        .select()
-        .single()
-
-      if (insertErr) throw insertErr
-      setProfile(inserted)
-      return inserted
-    }
 
     if (error) throw error
-    setProfile(data)
-    return data
+
+    // Re-fetch the full profile to update local state
+    const updated = await fetchProfile(userId)
+    setProfile(updated)
+    return updated
   }
 
   // Refresh profile from DB
