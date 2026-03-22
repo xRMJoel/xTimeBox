@@ -35,8 +35,7 @@ export default function CompleteProfilePage() {
       // Use upsert directly — handles both new and existing profile rows
       const { error: upsertErr } = await supabase
         .from('profiles')
-        .upsert(updates)
-        .eq('id', userId)
+        .upsert(updates, { onConflict: 'id' })
 
       if (upsertErr) throw upsertErr
 
