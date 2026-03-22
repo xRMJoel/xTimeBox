@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 export default function ResetPasswordPage() {
@@ -7,9 +7,34 @@ export default function ResetPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [ready, setReady] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const navigate = useNavigate()
+
+  // Wait for Supabase to pick up the recovery token from the URL
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setReady(true)
+      }
+    })
+
+    // Also check if we already have a session (token was already exchanged)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setReady(true)
+    })
+
+    // Safety timeout — if no event fires, let the user try anyway
+    const timeout = setTimeout(() => {
+      setReady(true)
+    }, 5000)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timeout)
+    }
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -49,6 +74,16 @@ export default function ResetPasswordPage() {
           <p className="text-base text-on-surface-variant">
             Your password has been changed successfully. Redirecting you to the dashboard...
           </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4">
+        <div className="glass-card rounded-2xl w-full max-w-md p-8 text-center space-y-4">
+          <div className="text-on-surface-variant text-base">Verifying your reset link...</div>
         </div>
       </div>
     )
@@ -122,6 +157,12 @@ export default function ResetPasswordPage() {
             {loading ? 'Updating...' : 'Update password'}
           </button>
         </form>
+
+        <p className="text-center text-sm text-outline">
+          <Link to="/login" className="text-primary hover:text-primary-dim transition-colors font-medium">
+            Back to sign in
+          </Link>
+        </p>
       </div>
     </div>
   )
