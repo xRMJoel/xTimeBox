@@ -23,21 +23,35 @@ export default function CompleteProfilePage() {
       const userId = user?.id
       if (!userId) throw new Error('No authenticated user. Try signing in again.')
 
-      const updates = {
-        id: userId,
-        email: user.email,
+      const profileData = {
         full_name: fullName,
         phone,
         company,
         profile_complete: true,
       }
 
-      // Use upsert directly — handles both new and existing profile rows
-      const { error: upsertErr } = await supabase
+      // Try update first (row may already exist from the auth trigger)
+      const { data: updated, error: updateErr } = await supabase
         .from('profiles')
-        .upsert(updates, { onConflict: 'id' })
+        .update(profileData)
+        .eq('id', userId)
+        .select()
 
-      if (upsertErr) throw upsertErr
+      if (updateErr) throw updateErr
+
+      // If update returned no rows, the profile doesn't exist yet — insert it
+      if (!updated || updated.length === 0) {
+        const { error: insertErr } = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            email: user.email,
+            ...profileData,
+          })
+          .select()
+
+        if (insertErr) throw insertErr
+      }
 
       await refreshProfile()
       navigate('/home')
