@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
 
 export default function CompleteProfilePage() {
-  const { profile, user, updateProfile } = useAuth()
+  const { profile, user, refreshProfile } = useAuth()
   const navigate = useNavigate()
 
   const meta = user?.user_metadata || {}
@@ -19,13 +20,27 @@ export default function CompleteProfilePage() {
     setLoading(true)
 
     try {
-      const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Save timed out. Please try again.')), 10000)
-      )
-      await Promise.race([
-        updateProfile({ full_name: fullName, phone, company, profile_complete: true }),
-        timeout,
-      ])
+      const userId = user?.id
+      if (!userId) throw new Error('No authenticated user. Try signing in again.')
+
+      const updates = {
+        id: userId,
+        email: user.email,
+        full_name: fullName,
+        phone,
+        company,
+        profile_complete: true,
+      }
+
+      // Use upsert directly — handles both new and existing profile rows
+      const { error: upsertErr } = await supabase
+        .from('profiles')
+        .upsert(updates)
+        .eq('id', userId)
+
+      if (upsertErr) throw upsertErr
+
+      await refreshProfile()
       navigate('/home')
     } catch (err) {
       setError(err.message)
