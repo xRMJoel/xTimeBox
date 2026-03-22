@@ -70,7 +70,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
       {/* Logo */}
       <div className="mb-8 text-center">
-        <img src="/logo.png" alt="xTimeBox" className="h-14 mx-auto mb-4" />
+        <Link to="/login"><img src="/logo.png" alt="xTimeBox" className="h-14 mx-auto mb-4" /></Link>
         <p className="text-on-surface-variant text-base">Create your account</p>
       </div>
 

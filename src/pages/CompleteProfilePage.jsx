@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
 export default function CompleteProfilePage() {
@@ -38,7 +38,7 @@ export default function CompleteProfilePage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
       {/* Logo */}
       <div className="mb-8 text-center">
-        <img src="/logo.png" alt="xTimeBox" className="h-14 mx-auto mb-4" />
+        <Link to="/home"><img src="/logo.png" alt="xTimeBox" className="h-14 mx-auto mb-4" /></Link>
         <h1 className="font-headline font-black text-2xl text-white mt-4">Complete your profile</h1>
         <p className="text-on-surface-variant text-base mt-2">
           Just a few details before you get started.
