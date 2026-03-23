@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(undefined) // undefined = not yet fetched, null = no profile row
   const [loading, setLoading] = useState(true)
   const initialised = useRef(false)
+  const profileRef = useRef(undefined) // tracks latest profile for use inside callbacks
 
   // Fetch the user's profile from the profiles table
   // Returns { data, error } so callers can distinguish "no row" from "fetch failed"
@@ -35,11 +36,17 @@ export function AuthProvider({ children }) {
           if (!result.error) {
             // Fetch succeeded — update profile (data is null if no row exists)
             setProfile(result.data)
+            profileRef.current = result.data
+          } else if (profileRef.current === undefined) {
+            // First load and fetch failed — set to null so the app doesn't
+            // get stuck on "Loading your profile..." forever
+            setProfile(null)
+            profileRef.current = null
           }
-          // If fetch failed, keep the existing profile rather than
-          // overwriting with null (which would trigger Complete Profile redirect)
+          // If fetch failed but we already have a valid profile, keep it
         } else {
           setProfile(undefined)
+          profileRef.current = undefined
         }
 
         // Mark loading done on the first event (INITIAL_SESSION)
@@ -128,7 +135,10 @@ export function AuthProvider({ children }) {
 
     // Re-fetch the full profile to update local state
     const result = await fetchProfile(userId)
-    if (!result.error) setProfile(result.data)
+    if (!result.error) {
+      setProfile(result.data)
+      profileRef.current = result.data
+    }
     return result.data
   }
 
@@ -136,7 +146,10 @@ export function AuthProvider({ children }) {
   async function refreshProfile() {
     if (session?.user) {
       const result = await fetchProfile(session.user.id)
-      if (!result.error) setProfile(result.data)
+      if (!result.error) {
+        setProfile(result.data)
+        profileRef.current = result.data
+      }
     }
   }
 
