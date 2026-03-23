@@ -5,11 +5,12 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
-  const [profile, setProfile] = useState(null)
+  const [profile, setProfile] = useState(undefined) // undefined = not yet fetched, null = no profile row
   const [loading, setLoading] = useState(true)
   const initialised = useRef(false)
 
   // Fetch the user's profile from the profiles table
+  // Returns { data, error } so callers can distinguish "no row" from "fetch failed"
   async function fetchProfile(userId) {
     const { data, error } = await supabase
       .from('profiles')
@@ -19,9 +20,9 @@ export function AuthProvider({ children }) {
 
     if (error) {
       console.error('Error fetching profile:', error)
-      return null
+      return { data: null, error }
     }
-    return data
+    return { data, error: null }
   }
 
   useEffect(() => {
@@ -30,10 +31,15 @@ export function AuthProvider({ children }) {
         setSession(s)
 
         if (s?.user) {
-          const p = await fetchProfile(s.user.id)
-          setProfile(p)
+          const result = await fetchProfile(s.user.id)
+          if (!result.error) {
+            // Fetch succeeded — update profile (data is null if no row exists)
+            setProfile(result.data)
+          }
+          // If fetch failed, keep the existing profile rather than
+          // overwriting with null (which would trigger Complete Profile redirect)
         } else {
-          setProfile(null)
+          setProfile(undefined)
         }
 
         // Mark loading done on the first event (INITIAL_SESSION)
@@ -121,16 +127,16 @@ export function AuthProvider({ children }) {
     if (error) throw error
 
     // Re-fetch the full profile to update local state
-    const updated = await fetchProfile(userId)
-    setProfile(updated)
-    return updated
+    const result = await fetchProfile(userId)
+    if (!result.error) setProfile(result.data)
+    return result.data
   }
 
   // Refresh profile from DB
   async function refreshProfile() {
     if (session?.user) {
-      const p = await fetchProfile(session.user.id)
-      setProfile(p)
+      const result = await fetchProfile(session.user.id)
+      if (!result.error) setProfile(result.data)
     }
   }
 

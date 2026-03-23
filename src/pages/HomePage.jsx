@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function HomePage() {
   const { user, profile } = useAuth()
@@ -281,7 +282,7 @@ export default function HomePage() {
         </div>
 
         {initialLoad ? (
-          <p className="text-sm text-on-surface-variant py-6 text-center">Loading...</p>
+          <LoadingSpinner message="Loading activity..." />
         ) : recentEntries.length === 0 ? (
           <div className="flex flex-col items-center text-center py-10 gap-4">
             <div

@@ -5,6 +5,7 @@ import StatusBadge from '../components/StatusBadge'
 import EntryCard from '../components/EntryCard'
 import { formatDate, getMonthLabel, getMonthStart } from '../lib/constants'
 import { supabase } from '../lib/supabase'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 // Get current month start
 function currentMonthStart() {
@@ -133,7 +134,7 @@ function UserDetail({ userId, userName, monthStart, onBack }) {
         )}
       </div>
 
-      {loading && entries.length === 0 && <p className="text-on-surface-variant">Loading entries...</p>}
+      {loading && entries.length === 0 && <LoadingSpinner message="Loading entries..." />}
 
       {sortedWeeks.map((weekEnding) => {
         const weekEntries = weekGroups[weekEnding]
@@ -397,7 +398,7 @@ export default function AdminPage() {
       )}
 
       {/* Summary table */}
-      {loading && summary.length === 0 && <p className="text-on-surface-variant text-center py-8">Loading...</p>}
+      {loading && summary.length === 0 && <LoadingSpinner message="Loading summary..." />}
       {!loading && summary.length === 0 && (
         <div className="glass-card-accent rounded-2xl p-12 text-center">
           <div className="icon-badge-gradient w-14 h-14 mx-auto mb-4" style={{ borderRadius: '14px' }}>

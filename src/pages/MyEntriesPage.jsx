@@ -4,6 +4,7 @@ import { useEntries } from '../hooks/useEntries'
 import EntryCard from '../components/EntryCard'
 import StatusBadge from '../components/StatusBadge'
 import { CATEGORIES, TIME_BLOCKS, formatDate, getMonthLabel, getMonthStart } from '../lib/constants'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 // Inline edit modal
 function EditModal({ entry, onSave, onCancel, saving }) {
@@ -164,7 +165,7 @@ export default function MyEntriesPage() {
       )}
 
       {loading && entries.length === 0 && (
-        <p className="text-on-surface-variant">Loading entries...</p>
+        <LoadingSpinner message="Loading your entries..." />
       )}
 
       {!loading && entries.length === 0 && (
