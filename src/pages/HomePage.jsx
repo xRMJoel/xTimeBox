@@ -2,12 +2,13 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
+import { getCurrentWeekFriday, getWeekDates } from '../lib/constants'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function HomePage() {
   const { user, profile } = useAuth()
   const [stats, setStats] = useState({ weekHours: 0, monthHours: 0, draftCount: 0, submittedCount: 0 })
-  const [recentEntries, setRecentEntries] = useState([])
+  const [weekEntries, setWeekEntries] = useState([])
   const [initialLoad, setInitialLoad] = useState(true)
   const fetchIdRef = useRef(0)
 
@@ -45,16 +46,16 @@ export default function HomePage() {
     // Only show loading spinner on the very first load, not on background refreshes
     // This prevents the "stuck loading" appearance
     try {
-      const [statsResult, entriesResult] = await Promise.allSettled([
+      const [statsResult, weekResult] = await Promise.allSettled([
         fetchStats(),
-        fetchRecentEntries(),
+        fetchWeekEntries(),
       ])
 
       // Only apply results if this is still the latest fetch
       if (id !== fetchIdRef.current) return
 
       if (statsResult.status === 'fulfilled') setStats(statsResult.value)
-      if (entriesResult.status === 'fulfilled') setRecentEntries(entriesResult.value)
+      if (weekResult.status === 'fulfilled') setWeekEntries(weekResult.value)
     } catch (err) {
       console.error('Dashboard data error:', err)
     } finally {
@@ -110,13 +111,14 @@ export default function HomePage() {
     }
   }
 
-  async function fetchRecentEntries() {
+  async function fetchWeekEntries() {
+    const weekEnding = getCurrentWeekFriday()
     const { data } = await supabase
       .from('timesheet_entries')
-      .select('id, entry_date, day_name, client, category, time_value, status, notes')
+      .select('id, entry_date, day_name, time_value, status, project_id, projects(name)')
       .eq('user_id', user.id)
-      .order('entry_date', { ascending: false })
-      .limit(5)
+      .eq('week_ending', weekEnding)
+      .order('entry_date', { ascending: true })
 
     return data || []
   }
@@ -132,24 +134,6 @@ export default function HomePage() {
   friday.setDate(now.getDate() + diffToFri)
   const weekEndingLabel = friday.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
   const monthName = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
-
-  const statusBadge = (status) => {
-    const styles = {
-      draft: { bg: 'rgba(250,204,21,0.1)', border: 'rgba(250,204,21,0.25)', text: 'text-yellow-400' },
-      submitted: { bg: 'rgba(0,201,255,0.1)', border: 'rgba(0,201,255,0.25)', text: 'text-cyan-400' },
-      signed_off: { bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.25)', text: 'text-green-400' },
-      returned: { bg: 'rgba(251,191,36,0.1)', border: 'rgba(251,191,36,0.25)', text: 'text-amber-400' },
-    }
-    const s = styles[status] || styles.draft
-    return (
-      <span
-        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${s.text}`}
-        style={{ background: s.bg, border: `1px solid ${s.border}` }}
-      >
-        {status?.replace('_', ' ')}
-      </span>
-    )
-  }
 
   return (
     <div className="relative space-y-10">
@@ -270,79 +254,12 @@ export default function HomePage() {
         />
       </div>
 
-      {/* ── Recent activity ── */}
-      <div className="glass-card rounded-2xl p-5 sm:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-heading font-bold text-base text-on-surface">Recent activity</h2>
-          <Link
-            to="/my-entries"
-            className="text-xs text-primary hover:text-primary-dim transition-colors font-medium"
-          >
-            View all
-          </Link>
-        </div>
-
-        {initialLoad ? (
-          <LoadingSpinner message="Loading activity..." />
-        ) : recentEntries.length === 0 ? (
-          <div className="flex flex-col items-center text-center py-8 gap-3">
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center"
-              style={{ background: 'rgba(0,201,255,0.08)', border: '1px solid rgba(0,201,255,0.15)' }}
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#66d3ff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-            </div>
-            <div>
-              <p className="font-heading font-bold text-on-surface text-sm mb-0.5">No entries yet</p>
-              <p className="text-sm text-on-surface-variant max-w-xs mx-auto">
-                Start tracking your time to see activity here.
-              </p>
-            </div>
-            <Link
-              to="/timesheet"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all duration-200 hover:scale-[1.03]"
-              style={{
-                background: 'linear-gradient(135deg, #00C9FF 0%, #7B2FDB 100%)',
-                boxShadow: '0 4px 16px rgba(0,201,255,0.25)',
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              Log your first entry
-            </Link>
-          </div>
-        ) : (
-          <div className="divide-y divide-[var(--glass-border-subtle)]">
-            {recentEntries.map((entry) => (
-              <div
-                key={entry.id}
-                className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
-              >
-                <div className="w-14 flex-shrink-0">
-                  <p className="text-xs text-on-surface-variant font-medium">
-                    {new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                  </p>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-on-surface truncate">
-                    {entry.client}
-                    {entry.category ? <span className="text-on-surface-variant"> · {entry.category}</span> : null}
-                  </p>
-                </div>
-                <div className="text-right flex-shrink-0 flex items-center gap-3">
-                  <span className="text-sm font-semibold text-on-surface tabular-nums">{entry.time_value}d</span>
-                  {statusBadge(entry.status)}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* ── Week at a glance ── */}
+      <WeekAtAGlance
+        weekEntries={weekEntries}
+        initialLoad={initialLoad}
+        weekEndingLabel={weekEndingLabel}
+      />
     </div>
   )
 }
@@ -377,6 +294,144 @@ function StatsCard({ label, value, unit, subtitle, colour }) {
         <span className="text-sm text-on-surface-variant">{unit}</span>
       </div>
       <p className="text-xs text-on-surface-variant/60 mt-1.5">{subtitle}</p>
+    </div>
+  )
+}
+
+function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel }) {
+  const weekEnding = getCurrentWeekFriday()
+  const weekDays = getWeekDates(weekEnding).filter((d) => !d.isWeekend) // Mon-Fri only
+
+  // Group entries by date
+  const byDate = {}
+  for (const entry of weekEntries) {
+    if (!byDate[entry.entry_date]) byDate[entry.entry_date] = []
+    byDate[entry.entry_date].push(entry)
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+
+  // Overall week status
+  const totalLogged = weekEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0)
+  const daysWithEntries = weekDays.filter((d) => (byDate[d.date] || []).length > 0).length
+  const allSubmitted = weekEntries.length > 0 && weekEntries.every((e) => e.status === 'submitted' || e.status === 'signed_off')
+  const hasReturned = weekEntries.some((e) => e.status === 'returned')
+
+  const statusLabel = weekEntries.length === 0
+    ? 'No entries'
+    : hasReturned
+    ? 'Returned'
+    : allSubmitted
+    ? 'Submitted'
+    : 'In progress'
+
+  const statusColour = weekEntries.length === 0
+    ? 'text-on-surface-variant'
+    : hasReturned
+    ? 'text-amber-400'
+    : allSubmitted
+    ? 'text-green-400'
+    : 'text-primary'
+
+  return (
+    <div className="glass-card rounded-2xl p-5 sm:p-6">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="font-heading font-bold text-base text-on-surface">This week at a glance</h2>
+          <p className="text-xs text-on-surface-variant mt-0.5">w/e {weekEndingLabel}</p>
+        </div>
+        <div className="text-right">
+          <p className={`text-sm font-bold ${statusColour}`}>{statusLabel}</p>
+          <p className="text-xs text-on-surface-variant">{totalLogged}d across {daysWithEntries} days</p>
+        </div>
+      </div>
+
+      {initialLoad ? (
+        <LoadingSpinner message="Loading week..." />
+      ) : (
+        <div className="space-y-2">
+          {weekDays.map((day) => {
+            const dayEntries = byDate[day.date] || []
+            const dayTotal = dayEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0)
+            const isToday = day.date === today
+            const isPast = day.date < today
+            const hasEntries = dayEntries.length > 0
+            const dayHasReturned = dayEntries.some((e) => e.status === 'returned')
+            const dayAllSubmitted = hasEntries && dayEntries.every((e) => e.status === 'submitted' || e.status === 'signed_off')
+
+            // Status dot colour
+            const dotColour = !hasEntries
+              ? (isPast ? 'bg-red-400/60' : 'bg-white/10')
+              : dayHasReturned
+              ? 'bg-amber-400'
+              : dayAllSubmitted
+              ? 'bg-green-400'
+              : 'bg-primary'
+
+            // Unique project names for display
+            const projects = [...new Set(dayEntries.map((e) => e.projects?.name).filter(Boolean))]
+
+            return (
+              <div
+                key={day.date}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  isToday
+                    ? 'ring-1 ring-primary/30'
+                    : ''
+                }`}
+                style={{
+                  background: isToday
+                    ? 'rgba(0,201,255,0.05)'
+                    : hasEntries
+                    ? 'var(--glass-bg)'
+                    : 'transparent',
+                }}
+              >
+                {/* Day label */}
+                <div className="w-10 flex-shrink-0">
+                  <p className={`text-sm font-bold ${isToday ? 'text-primary' : 'text-on-surface'}`}>
+                    {day.dayName.slice(0, 3)}
+                  </p>
+                </div>
+
+                {/* Status dot */}
+                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dotColour}`} />
+
+                {/* Project names or gap message */}
+                <div className="flex-1 min-w-0">
+                  {hasEntries ? (
+                    <p className="text-sm text-on-surface-variant truncate">
+                      {projects.length > 0 ? projects.join(', ') : `${dayEntries.length} ${dayEntries.length === 1 ? 'entry' : 'entries'}`}
+                    </p>
+                  ) : isPast ? (
+                    <p className="text-sm text-red-400/60 italic">No time logged</p>
+                  ) : (
+                    <p className="text-sm text-on-surface-variant/40">--</p>
+                  )}
+                </div>
+
+                {/* Day total */}
+                <div className="flex-shrink-0 text-right w-12">
+                  {hasEntries && (
+                    <span className="text-sm font-semibold text-on-surface tabular-nums">{dayTotal}d</span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Footer action */}
+      <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--glass-border-subtle)' }}>
+        <Link
+          to={`/timesheet?week=${weekEnding}`}
+          className="flex items-center justify-center gap-2 text-sm font-bold text-primary hover:text-primary-dim transition-colors"
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>edit_calendar</span>
+          Edit this week
+        </Link>
+      </div>
     </div>
   )
 }

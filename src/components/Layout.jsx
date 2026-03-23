@@ -94,16 +94,16 @@ export default function Layout({ children }) {
               {/* Theme toggle */}
               <button
                 onClick={toggleTheme}
-                className="p-2 rounded-full text-on-surface-variant hover:text-on-surface hover:bg-[var(--white-alpha-5)] transition-all duration-300"
+                className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-[var(--white-alpha-5)] transition-all duration-300"
                 title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: '22px', fontVariationSettings: "'FILL' 1" }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '20px', fontVariationSettings: "'FILL' 1" }}>
                   {theme === 'dark' ? 'light_mode' : 'nightlight'}
                 </span>
               </button>
 
-              <button className="p-2 rounded-full text-on-surface-variant hover:text-on-surface hover:bg-[var(--white-alpha-5)] transition-all duration-300">
-                <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>notifications</span>
+              <button className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-[var(--white-alpha-5)] transition-all duration-300">
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>notifications</span>
               </button>
 
               <div className="relative">
