@@ -3,6 +3,8 @@ import { CATEGORIES, TIME_BLOCKS } from '../lib/constants'
 
 export default function EntryCard({ entry, onEdit, onDelete, readonly = false }) {
   const timeBlock = TIME_BLOCKS.find((t) => t.value === entry.time_block)
+  const canDelete = onDelete && !readonly
+  const canEdit = onEdit && !readonly && entry.status !== 'signed_off'
 
   return (
     <div className="glass-card-inset rounded-xl p-4 flex items-start justify-between gap-4 hover:border-[var(--glass-border)] transition-colors group/entry">
@@ -34,9 +36,9 @@ export default function EntryCard({ entry, onEdit, onDelete, readonly = false })
           {entry.time_value ? Number(entry.time_value).toFixed(2) : '0.00'}d
         </span>
 
-        {!readonly && entry.status !== 'signed_off' && (
+        {(canEdit || canDelete) && (
           <div className={`flex items-center gap-2 transition-opacity ${entry.status === 'draft' || entry.status === 'returned' ? '' : 'opacity-0 group-hover/entry:opacity-100'}`}>
-            {onEdit && (
+            {canEdit && (
               <button
                 onClick={() => onEdit(entry)}
                 className="text-xs text-primary hover:text-primary-dim font-semibold transition-colors"
@@ -44,7 +46,7 @@ export default function EntryCard({ entry, onEdit, onDelete, readonly = false })
                 Edit
               </button>
             )}
-            {onDelete && (entry.status === 'draft' || entry.status === 'returned') && (
+            {canDelete && (
               <button
                 onClick={() => onDelete(entry.id)}
                 className="text-xs text-error hover:text-error-dim font-semibold transition-colors"
@@ -55,7 +57,7 @@ export default function EntryCard({ entry, onEdit, onDelete, readonly = false })
           </div>
         )}
 
-        {entry.status === 'signed_off' && (
+        {entry.status === 'signed_off' && !canDelete && (
           <span className="material-symbols-outlined text-outline opacity-50" style={{ fontSize: '16px' }}>lock</span>
         )}
       </div>

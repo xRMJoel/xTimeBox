@@ -25,7 +25,7 @@ function shiftMonth(monthStart, delta) {
 
 function ApprovalsTab() {
   const { user } = useAuth()
-  const { fetchAllEntries, returnWeekEntries, loading } = useEntries()
+  const { fetchAllEntries, returnWeekEntries, deleteEntry, loading } = useEntries()
   const { signOffMonth, revokeSignoff, fetchSignoffs, fetchAdminSummary } = useSignoffs()
   const [monthStart, setMonthStart] = useState(currentMonthStart())
   const [entries, setEntries] = useState([])
@@ -36,6 +36,7 @@ function ApprovalsTab() {
   const [actionLoading, setActionLoading] = useState(false)
   const [returningWeek, setReturningWeek] = useState(null)
   const [returnReason, setReturnReason] = useState('')
+  const [deletingWeek, setDeletingWeek] = useState(null)
 
   const loadData = useCallback(async () => {
     const [entriesData, projectsData, signoffsData] = await Promise.all([
@@ -111,6 +112,29 @@ function ApprovalsTab() {
       finally { setActionLoading(false) }
     }
 
+    async function handleDeleteEntry(entryId) {
+      if (!confirm('Delete this entry? This cannot be undone.')) return
+      setActionLoading(true)
+      try {
+        await deleteEntry(entryId)
+        setMessage({ type: 'success', text: 'Entry deleted.' })
+        await loadData()
+      } catch (err) { setMessage({ type: 'error', text: err.message }) }
+      finally { setActionLoading(false) }
+    }
+
+    async function handleDeleteWeek() {
+      setActionLoading(true)
+      try {
+        const weekEntriesToDelete = weekGroups[deletingWeek] || []
+        await Promise.all(weekEntriesToDelete.map((e) => deleteEntry(e.id)))
+        setMessage({ type: 'success', text: `${weekEntriesToDelete.length} entries deleted.` })
+        setDeletingWeek(null)
+        await loadData()
+      } catch (err) { setMessage({ type: 'error', text: err.message }) }
+      finally { setActionLoading(false) }
+    }
+
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
@@ -170,13 +194,20 @@ function ApprovalsTab() {
               <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--week-header-border)', background: 'var(--week-header-bg)' }}>
                 <div className="flex items-center justify-between flex-1">
                   <span className="text-base font-medium text-on-surface">Week ending {formatDate(weekEnding)}</span>
-                  {weekEntries.some((e) => e.status === 'submitted') && (
-                    <button onClick={() => setReturningWeek(weekEnding)}
-                      className="text-sm text-amber-400 hover:text-amber-300 font-medium transition-colors flex items-center gap-1">
-                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>undo</span>
-                      Return week
+                  <div className="flex items-center gap-4">
+                    {weekEntries.some((e) => e.status === 'submitted') && (
+                      <button onClick={() => setReturningWeek(weekEnding)}
+                        className="text-sm text-amber-400 hover:text-amber-300 font-medium transition-colors flex items-center gap-1">
+                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>undo</span>
+                        Return week
+                      </button>
+                    )}
+                    <button onClick={() => setDeletingWeek(weekEnding)}
+                      className="text-sm text-error hover:text-error-dim font-medium transition-colors flex items-center gap-1">
+                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>delete</span>
+                      Delete week
                     </button>
-                  )}
+                  </div>
                 </div>
                 <span className="text-base font-bold text-primary ml-4">{weekTotal} days</span>
               </div>
@@ -185,7 +216,7 @@ function ApprovalsTab() {
                   <div key={date} className="px-6 py-4">
                     <div className="text-base font-medium text-on-surface mb-2">{dayGroups[date][0].day_name}, {formatDate(date)}</div>
                     <div className="space-y-2">
-                      {dayGroups[date].map((entry) => <EntryCard key={entry.id} entry={entry} readonly />)}
+                      {dayGroups[date].map((entry) => <EntryCard key={entry.id} entry={entry} onDelete={handleDeleteEntry} />)}
                     </div>
                   </div>
                 ))}
@@ -217,6 +248,30 @@ function ApprovalsTab() {
                 <button onClick={handleReturnWeek} disabled={actionLoading}
                   className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl px-5 py-2.5 text-sm font-bold transition-colors disabled:opacity-50">
                   {actionLoading ? 'Returning...' : 'Return entries'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete week modal */}
+        {deletingWeek && (
+          <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4" style={{ background: 'var(--modal-overlay)' }}>
+            <div className="glass-card rounded-2xl w-full max-w-md p-6 space-y-4" style={{ background: 'var(--color-surface-container)' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(255,113,108,0.1)', border: '1px solid rgba(255,113,108,0.2)' }}>
+                  <span className="material-symbols-outlined text-error" style={{ fontSize: '18px' }}>delete_forever</span>
+                </div>
+                <h3 className="font-headline font-bold text-xl text-on-surface">Delete week</h3>
+              </div>
+              <p className="text-sm text-on-surface-variant">
+                This will permanently delete all {(weekGroups[deletingWeek] || []).length} entries for week ending {formatDate(deletingWeek)} for {selectedUser.userName}. This cannot be undone.
+              </p>
+              <div className="flex items-center justify-end gap-4 pt-2">
+                <button onClick={() => setDeletingWeek(null)} className="text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors">Cancel</button>
+                <button onClick={handleDeleteWeek} disabled={actionLoading}
+                  className="bg-red-600 hover:bg-red-700 text-white rounded-xl px-5 py-2.5 text-sm font-bold transition-colors disabled:opacity-50">
+                  {actionLoading ? 'Deleting...' : 'Delete all entries'}
                 </button>
               </div>
             </div>
@@ -371,6 +426,8 @@ function ProjectsTab() {
   const [formStatus, setFormStatus] = useState('active')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState(null)
+  const [deletingProject, setDeletingProject] = useState(null)
+  const [deleteEntriesToo, setDeleteEntriesToo] = useState(false)
 
   async function loadProjects() {
     setLoading(true)
@@ -411,6 +468,33 @@ function ProjectsTab() {
         setMessage({ type: 'success', text: 'Project created.' })
       }
       setShowForm(false)
+      await loadProjects()
+    } catch (err) { setMessage({ type: 'error', text: err.message }) }
+    finally { setSaving(false) }
+  }
+
+  async function handleDeleteProject() {
+    if (!deletingProject) return
+    setSaving(true)
+    try {
+      if (deleteEntriesToo) {
+        // Delete all timesheet entries for this project
+        const { error: entriesErr } = await supabase.from('timesheet_entries').delete().eq('project_id', deletingProject.id)
+        if (entriesErr) throw entriesErr
+      } else {
+        // Nullify project_id on entries so historical data remains
+        const { error: nullErr } = await supabase.from('timesheet_entries').update({ project_id: null }).eq('project_id', deletingProject.id)
+        if (nullErr) throw nullErr
+      }
+      // Remove user_projects assignments
+      const { error: upErr } = await supabase.from('user_projects').delete().eq('project_id', deletingProject.id)
+      if (upErr) throw upErr
+      // Delete the project
+      const { error } = await supabase.from('projects').delete().eq('id', deletingProject.id)
+      if (error) throw error
+      setMessage({ type: 'success', text: `Project "${deletingProject.name}" deleted.` })
+      setDeletingProject(null)
+      setDeleteEntriesToo(false)
       await loadProjects()
     } catch (err) { setMessage({ type: 'error', text: err.message }) }
     finally { setSaving(false) }
@@ -460,9 +544,14 @@ function ProjectsTab() {
                   </div>
                   <p className="text-sm text-on-surface-variant mt-0.5">{project.client}</p>
                 </div>
-                <button onClick={() => openEdit(project)} className="text-sm text-primary hover:text-primary-dim font-medium transition-colors">
-                  Edit
-                </button>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => openEdit(project)} className="text-sm text-primary hover:text-primary-dim font-medium transition-colors">
+                    Edit
+                  </button>
+                  <button onClick={() => { setDeletingProject(project); setDeleteEntriesToo(false) }} className="text-sm text-error hover:text-error-dim font-medium transition-colors">
+                    Delete
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -498,6 +587,51 @@ function ProjectsTab() {
           </div>
         </div>
       )}
+
+      {/* Delete project confirmation modal */}
+      {deletingProject && (
+        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4" style={{ background: 'var(--modal-overlay)' }}>
+          <div className="glass-card rounded-2xl w-full max-w-md p-6 space-y-4" style={{ background: 'var(--color-surface-container)' }}>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(255,113,108,0.1)', border: '1px solid rgba(255,113,108,0.2)' }}>
+                <span className="material-symbols-outlined text-error" style={{ fontSize: '18px' }}>delete_forever</span>
+              </div>
+              <h3 className="font-headline font-bold text-xl text-on-surface">Delete project</h3>
+            </div>
+            <p className="text-sm text-on-surface-variant">
+              You are about to delete <strong className="text-on-surface">{deletingProject.name}</strong>. This will remove it from the project list and unassign all users.
+            </p>
+            <div className="rounded-xl p-4" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+              <p className="text-sm text-on-surface font-medium mb-3">What should happen to existing timesheet entries?</p>
+              <div className="space-y-2">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="deleteProjectEntries" checked={!deleteEntriesToo} onChange={() => setDeleteEntriesToo(false)}
+                    className="mt-0.5 accent-[#00C9FF]" />
+                  <div>
+                    <p className="text-sm font-medium text-on-surface">Keep entries</p>
+                    <p className="text-xs text-on-surface-variant">Entries remain for historical records but won't be linked to this project.</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="deleteProjectEntries" checked={deleteEntriesToo} onChange={() => setDeleteEntriesToo(true)}
+                    className="mt-0.5 accent-[#00C9FF]" />
+                  <div>
+                    <p className="text-sm font-medium text-error">Delete all entries</p>
+                    <p className="text-xs text-on-surface-variant">Permanently remove all timesheet entries logged against this project.</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-4 pt-2">
+              <button onClick={() => { setDeletingProject(null); setDeleteEntriesToo(false) }} className="text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors">Cancel</button>
+              <button onClick={handleDeleteProject} disabled={saving}
+                className="bg-red-600 hover:bg-red-700 text-white rounded-xl px-5 py-2.5 text-sm font-bold transition-colors disabled:opacity-50">
+                {saving ? 'Deleting...' : 'Delete project'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -516,6 +650,9 @@ function UsersTab() {
   const [inviteResult, setInviteResult] = useState(null)
   const [assigningUser, setAssigningUser] = useState(null)
   const [message, setMessage] = useState(null)
+  const [deletingUser, setDeletingUser] = useState(null)
+  const [deleteUserEntries, setDeleteUserEntries] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   async function loadData() {
     setLoading(true)
@@ -554,6 +691,29 @@ function UsersTab() {
     } catch (err) {
       setMessage({ type: 'error', text: err.message })
     }
+  }
+
+  async function handleDeleteUser() {
+    if (!deletingUser) return
+    setDeleting(true)
+    try {
+      if (deleteUserEntries) {
+        // Delete all timesheet entries for this user
+        const { error: entriesErr } = await supabase.from('timesheet_entries').delete().eq('user_id', deletingUser.id)
+        if (entriesErr) throw entriesErr
+      }
+      // Remove user_projects assignments
+      const { error: upErr } = await supabase.from('user_projects').delete().eq('user_id', deletingUser.id)
+      if (upErr) throw upErr
+      // Delete the profile (entries remain with user_id for historical reference if not deleted)
+      const { error: profileErr } = await supabase.from('profiles').delete().eq('id', deletingUser.id)
+      if (profileErr) throw profileErr
+      setMessage({ type: 'success', text: `User "${deletingUser.full_name || deletingUser.email}" removed.` })
+      setDeletingUser(null)
+      setDeleteUserEntries(false)
+      await loadData()
+    } catch (err) { setMessage({ type: 'error', text: err.message }) }
+    finally { setDeleting(false) }
   }
 
   return (
@@ -631,9 +791,14 @@ function UsersTab() {
                       )}
                     </div>
                   </div>
-                  <button onClick={() => setAssigningUser(u)} className="text-sm text-primary hover:text-primary-dim font-medium transition-colors">
-                    Manage projects
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setAssigningUser(u)} className="text-sm text-primary hover:text-primary-dim font-medium transition-colors">
+                      Manage projects
+                    </button>
+                    <button onClick={() => { setDeletingUser(u); setDeleteUserEntries(false) }} className="text-sm text-error hover:text-error-dim font-medium transition-colors">
+                      Delete
+                    </button>
+                  </div>
                 </div>
               )
             })}
@@ -682,6 +847,51 @@ function UsersTab() {
           onClose={() => setShowInvite(false)}
           onInvited={(result) => { setShowInvite(false); setInviteResult(result); loadData() }}
         />
+      )}
+
+      {/* Delete user confirmation modal */}
+      {deletingUser && (
+        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4" style={{ background: 'var(--modal-overlay)' }}>
+          <div className="glass-card rounded-2xl w-full max-w-md p-6 space-y-4" style={{ background: 'var(--color-surface-container)' }}>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(255,113,108,0.1)', border: '1px solid rgba(255,113,108,0.2)' }}>
+                <span className="material-symbols-outlined text-error" style={{ fontSize: '18px' }}>person_remove</span>
+              </div>
+              <h3 className="font-headline font-bold text-xl text-on-surface">Delete user</h3>
+            </div>
+            <p className="text-sm text-on-surface-variant">
+              You are about to remove <strong className="text-on-surface">{deletingUser.full_name || deletingUser.email}</strong> from the system. This will unassign them from all projects.
+            </p>
+            <div className="rounded-xl p-4" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+              <p className="text-sm text-on-surface font-medium mb-3">What should happen to their timesheet entries?</p>
+              <div className="space-y-2">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="deleteUserEntries" checked={!deleteUserEntries} onChange={() => setDeleteUserEntries(false)}
+                    className="mt-0.5 accent-[#00C9FF]" />
+                  <div>
+                    <p className="text-sm font-medium text-on-surface">Keep entries</p>
+                    <p className="text-xs text-on-surface-variant">Their name and timesheet data remain for historical records.</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="deleteUserEntries" checked={deleteUserEntries} onChange={() => setDeleteUserEntries(true)}
+                    className="mt-0.5 accent-[#00C9FF]" />
+                  <div>
+                    <p className="text-sm font-medium text-error">Delete all entries</p>
+                    <p className="text-xs text-on-surface-variant">Permanently remove all their timesheet entries from the system.</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-4 pt-2">
+              <button onClick={() => { setDeletingUser(null); setDeleteUserEntries(false) }} className="text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors">Cancel</button>
+              <button onClick={handleDeleteUser} disabled={deleting}
+                className="bg-red-600 hover:bg-red-700 text-white rounded-xl px-5 py-2.5 text-sm font-bold transition-colors disabled:opacity-50">
+                {deleting ? 'Deleting...' : 'Delete user'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
