@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import LoadingSpinner from './LoadingSpinner'
@@ -5,6 +6,18 @@ import LoadingSpinner from './LoadingSpinner'
 export default function ProtectedRoute({ children, requireManager = false }) {
   const { session, profile, loading, isManager, profileComplete } = useAuth()
   const location = useLocation()
+  const [profileTimedOut, setProfileTimedOut] = useState(false)
+
+  // Safety net: if profile stays undefined for 6 seconds after auth loads,
+  // stop waiting — treat it as "no profile" so the app doesn't hang
+  useEffect(() => {
+    if (loading || profile !== undefined) {
+      setProfileTimedOut(false)
+      return
+    }
+    const timer = setTimeout(() => setProfileTimedOut(true), 6000)
+    return () => clearTimeout(timer)
+  }, [loading, profile])
 
   if (loading) {
     return (
@@ -18,8 +31,8 @@ export default function ProtectedRoute({ children, requireManager = false }) {
     return <Navigate to="/login" replace />
   }
 
-  // Profile is still being fetched (undefined) — wait, don't redirect yet
-  if (profile === undefined) {
+  // Profile is still being fetched (undefined) — wait, but not forever
+  if (profile === undefined && !profileTimedOut) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner message="Loading your profile..." />

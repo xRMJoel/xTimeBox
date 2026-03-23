@@ -62,6 +62,8 @@ export function AuthProvider({ children }) {
       if (!initialised.current) {
         console.warn('Auth: no session event received, proceeding as unauthenticated')
         initialised.current = true
+        setProfile(null)
+        profileRef.current = null
         setLoading(false)
       }
     }, 5000)
