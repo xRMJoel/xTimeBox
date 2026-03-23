@@ -73,7 +73,7 @@ export default function Layout({ children }) {
                     to={item.to}
                     className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
                       isActive
-                        ? 'text-white'
+                        ? 'text-on-surface'
                         : 'text-on-surface-variant hover:text-on-surface hover:bg-[var(--white-alpha-5)]'
                     }`}
                     style={isActive ? {
