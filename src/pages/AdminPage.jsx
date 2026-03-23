@@ -21,12 +21,14 @@ function shiftMonth(monthStart, delta) {
 
 // ── User detail view ──
 function UserDetail({ userId, userName, monthStart, onBack }) {
-  const { fetchAllEntries, loading } = useEntries()
+  const { fetchAllEntries, loading, returnWeekEntries } = useEntries()
   const { signOffMonth, revokeSignoff, fetchSignoffs } = useSignoffs()
   const [entries, setEntries] = useState([])
   const [signoff, setSignoff] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [message, setMessage] = useState(null)
+  const [returningWeek, setReturningWeek] = useState(null)
+  const [returnReason, setReturnReason] = useState('')
 
   const loadData = useCallback(async () => {
     const [entriesData, signoffsData] = await Promise.all([
@@ -66,6 +68,18 @@ function UserDetail({ userId, userName, monthStart, onBack }) {
     try {
       await revokeSignoff(userId, monthStart)
       setMessage({ type: 'success', text: 'Sign-off revoked. Entries unlocked.' })
+      await loadData()
+    } catch (err) { setMessage({ type: 'error', text: err.message }) }
+    finally { setActionLoading(false) }
+  }
+
+  async function handleReturnWeek() {
+    setActionLoading(true)
+    try {
+      await returnWeekEntries(userId, returningWeek, returnReason || null)
+      setMessage({ type: 'success', text: 'Entries returned to user.' })
+      setReturningWeek(null)
+      setReturnReason('')
       await loadData()
     } catch (err) { setMessage({ type: 'error', text: err.message }) }
     finally { setActionLoading(false) }
@@ -134,7 +148,18 @@ function UserDetail({ userId, userName, monthStart, onBack }) {
         return (
           <div key={weekEnding} className="glass-card rounded-2xl overflow-hidden">
             <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(0,201,255,0.12)', background: 'linear-gradient(135deg, rgba(0,201,255,0.04) 0%, rgba(123,47,219,0.04) 100%)' }}>
-              <span className="text-base font-medium text-white">Week ending {formatDate(weekEnding)}</span>
+              <div className="flex items-center justify-between flex-1">
+                <span className="text-base font-medium text-white">Week ending {formatDate(weekEnding)}</span>
+                {weekEntries.some(e => e.status === 'submitted') && (
+                  <button
+                    onClick={() => setReturningWeek(weekEnding)}
+                    className="text-sm text-amber-400 hover:text-amber-300 font-medium transition-colors flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>undo</span>
+                    Return week
+                  </button>
+                )}
+              </div>
               <span className="text-base font-bold text-primary">{weekTotal} days</span>
             </div>
             <div className="divide-y divide-white/5">
@@ -150,6 +175,41 @@ function UserDetail({ userId, userName, monthStart, onBack }) {
           </div>
         )
       })}
+
+      {returningWeek && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="glass-card rounded-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)' }}>
+                <span className="material-symbols-outlined text-amber-400" style={{ fontSize: '18px' }}>undo</span>
+              </div>
+              <h3 className="font-headline font-bold text-xl text-white">Return entries</h3>
+            </div>
+            <p className="text-sm text-on-surface-variant">
+              Return week ending {formatDate(returningWeek)} to {userName} for editing. Optionally add a reason.
+            </p>
+            <div>
+              <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Reason (optional)</label>
+              <input
+                type="text"
+                value={returnReason}
+                onChange={(e) => setReturnReason(e.target.value)}
+                className="input-dark w-full"
+                placeholder="e.g. Missing project references for Tuesday"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-4 pt-2">
+              <button onClick={() => { setReturningWeek(null); setReturnReason('') }} className="text-sm font-medium text-on-surface-variant hover:text-white transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleReturnWeek} disabled={actionLoading}
+                className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl px-5 py-2.5 text-sm font-bold transition-colors disabled:opacity-50">
+                {actionLoading ? 'Returning...' : 'Return entries'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -380,6 +440,8 @@ export default function AdminPage() {
                   <td className="px-6 py-4 text-center">
                     {row.is_signed_off ? (
                       <StatusBadge status="signed_off" />
+                    ) : row.returned_count > 0 ? (
+                      <StatusBadge status="returned" />
                     ) : row.submitted_count > 0 ? (
                       <StatusBadge status="submitted" />
                     ) : (

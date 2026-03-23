@@ -160,21 +160,58 @@ export function useEntries() {
     }
   }, [])
 
-  // Mark entries as submitted for a week
+  // Mark entries as submitted for a week (handles both draft and returned)
   const submitWeek = useCallback(async (userId, weekEnding) => {
     setLoading(true)
     setError(null)
     try {
       const { data, error: err } = await supabase
         .from('timesheet_entries')
-        .update({ status: 'submitted' })
+        .update({ status: 'submitted', return_reason: null, returned_by: null })
         .eq('user_id', userId)
         .eq('week_ending', weekEnding)
-        .eq('status', 'draft')
+        .in('status', ['draft', 'returned'])
         .select()
 
       if (err) throw err
       return data
+    } catch (e) {
+      setError(e.message)
+      throw e
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Return entries for a week (admin action)
+  const returnWeekEntries = useCallback(async (userId, weekEnding, reason = null) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { error: err } = await supabase.rpc('return_week_entries', {
+        p_user_id: userId,
+        p_week_ending: weekEnding,
+        p_reason: reason,
+      })
+      if (err) throw err
+    } catch (e) {
+      setError(e.message)
+      throw e
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Return a single entry (admin action)
+  const returnEntry = useCallback(async (entryId, reason = null) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { error: err } = await supabase.rpc('return_entry', {
+        p_entry_id: entryId,
+        p_reason: reason,
+      })
+      if (err) throw err
     } catch (e) {
       setError(e.message)
       throw e
@@ -193,6 +230,8 @@ export function useEntries() {
     updateEntry,
     deleteEntry,
     submitWeek,
+    returnWeekEntries,
+    returnEntry,
   }
 }
 

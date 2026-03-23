@@ -182,7 +182,8 @@ export default function MyEntriesPage() {
       {sortedWeeks.map((weekEnding) => {
         const weekEntries = weekGroups[weekEnding]
         const totalDays = weekEntries.reduce((sum, e) => sum + Number(e.time_value), 0)
-        const hasDrafts = weekEntries.some((e) => e.status === 'draft')
+        const hasDrafts = weekEntries.some((e) => e.status === 'draft' || e.status === 'returned')
+        const hasReturned = weekEntries.some((e) => e.status === 'returned')
         const allSignedOff = weekEntries.every((e) => e.status === 'signed_off')
         const client = weekEntries[0]?.client
 
@@ -210,11 +211,29 @@ export default function MyEntriesPage() {
                 {allSignedOff && <StatusBadge status="signed_off" />}
                 {hasDrafts && !allSignedOff && (
                   <button onClick={() => handleSubmitWeek(weekEnding)} className="btn-gradient text-sm">
-                    Submit week
+                    {hasReturned ? 'Resubmit week' : 'Submit week'}
                   </button>
                 )}
               </div>
             </div>
+
+            {hasReturned && (
+              <div className="px-6 py-3 flex items-center gap-2" style={{ background: 'rgba(251,191,36,0.05)', borderBottom: '1px solid rgba(251,191,36,0.15)' }}>
+                <span className="material-symbols-outlined text-amber-400" style={{ fontSize: '18px' }}>undo</span>
+                <p className="text-sm text-amber-400 font-medium">
+                  Some entries were returned for editing. Make changes and resubmit the week.
+                </p>
+              </div>
+            )}
+
+            {hasDrafts && !hasReturned && !allSignedOff && (
+              <div className="px-6 py-3 flex items-center gap-2" style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '18px' }}>edit_note</span>
+                <p className="text-sm text-on-surface-variant">
+                  These entries are saved as drafts. Submit the week when you're ready for review.
+                </p>
+              </div>
+            )}
 
             {/* Day groups */}
             <div className="divide-y divide-white/5">

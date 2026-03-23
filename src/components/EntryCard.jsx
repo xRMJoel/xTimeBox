@@ -20,6 +20,13 @@ export default function EntryCard({ entry, onEdit, onDelete, readonly = false })
         {entry.notes && (
           <p className="text-sm text-on-surface-variant italic mt-0.5">{entry.notes}</p>
         )}
+
+        {entry.return_reason && entry.status === 'returned' && (
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="material-symbols-outlined text-amber-400" style={{ fontSize: '14px' }}>undo</span>
+            <p className="text-xs text-amber-400">{entry.return_reason}</p>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
@@ -28,7 +35,7 @@ export default function EntryCard({ entry, onEdit, onDelete, readonly = false })
         </span>
 
         {!readonly && entry.status !== 'signed_off' && (
-          <div className="flex items-center gap-2 opacity-0 group-hover/entry:opacity-100 transition-opacity">
+          <div className={`flex items-center gap-2 transition-opacity ${entry.status === 'draft' || entry.status === 'returned' ? '' : 'opacity-0 group-hover/entry:opacity-100'}`}>
             {onEdit && (
               <button
                 onClick={() => onEdit(entry)}
@@ -37,7 +44,7 @@ export default function EntryCard({ entry, onEdit, onDelete, readonly = false })
                 Edit
               </button>
             )}
-            {onDelete && entry.status === 'draft' && (
+            {onDelete && (entry.status === 'draft' || entry.status === 'returned') && (
               <button
                 onClick={() => onDelete(entry.id)}
                 className="text-xs text-error hover:text-error-dim font-semibold transition-colors"
