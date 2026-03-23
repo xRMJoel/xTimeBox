@@ -10,14 +10,16 @@ import {
   generateReference,
   formatDate,
 } from '../lib/constants'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 // ── Entry form row (inside a day) ──
-function EntryForm({ entry, onChange, onRemove, index }) {
+function EntryForm({ entry, onChange, onRemove, index, isExisting }) {
   const category = CATEGORIES.find((c) => c.value === entry.category)
+  const readonly = entry.status === 'signed_off' || entry.status === 'submitted'
 
   return (
-    <div className="glass-card-inset rounded-xl p-5 relative group/entry">
-      {onRemove && (
+    <div className={`glass-card-inset rounded-xl p-5 relative group/entry ${readonly ? 'opacity-70' : ''}`}>
+      {onRemove && !readonly && (
         <button
           type="button"
           onClick={() => onRemove(index)}
@@ -32,8 +34,28 @@ function EntryForm({ entry, onChange, onRemove, index }) {
         <div className="icon-badge-gradient w-7 h-7" style={{ borderRadius: '8px' }}>
           <span className="text-white font-black text-xs">{index + 1}</span>
         </div>
-        <h4 className="signature-gradient-text font-bold text-sm">Entry {index + 1}</h4>
+        <div className="flex items-center gap-2">
+          <h4 className="signature-gradient-text font-bold text-sm">Entry {index + 1}</h4>
+          {isExisting && (
+            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+              entry.status === 'returned' ? 'text-amber-400 bg-amber-400/10 border border-amber-400/20'
+              : entry.status === 'submitted' ? 'text-primary bg-primary/10 border border-primary/20'
+              : entry.status === 'signed_off' ? 'text-green-400 bg-green-400/10 border border-green-400/20'
+              : 'text-on-surface-variant bg-white/5 border border-white/10'
+            }`}>
+              {entry.status === 'signed_off' ? 'Signed off' : entry.status}
+            </span>
+          )}
+        </div>
       </div>
+
+      {readonly && (
+        <div className="px-1 mb-3">
+          <p className="text-xs text-on-surface-variant italic">
+            This entry is {entry.status === 'signed_off' ? 'signed off' : 'submitted'} and cannot be edited.
+          </p>
+        </div>
+      )}
 
       <div className={`grid grid-cols-1 ${category?.showReference ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 mb-4`}>
         <div>
@@ -41,7 +63,8 @@ function EntryForm({ entry, onChange, onRemove, index }) {
           <select
             value={entry.category}
             onChange={(e) => onChange(index, 'category', e.target.value)}
-            className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
+            disabled={readonly}
+            className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
             style={{ background: 'var(--color-surface-variant)', border: 'none' }}
           >
             <option value="">Select category</option>
@@ -56,7 +79,8 @@ function EntryForm({ entry, onChange, onRemove, index }) {
           <select
             value={entry.time_block}
             onChange={(e) => onChange(index, 'time_block', e.target.value)}
-            className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
+            disabled={readonly}
+            className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
             style={{ background: 'var(--color-surface-variant)', border: 'none' }}
           >
             <option value="">Select time</option>
@@ -73,7 +97,8 @@ function EntryForm({ entry, onChange, onRemove, index }) {
               type="text"
               value={entry.feature_tag}
               onChange={(e) => onChange(index, 'feature_tag', e.target.value)}
-              className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
+              disabled={readonly}
+              className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
               style={{ background: 'var(--color-surface-variant)', border: 'none' }}
               placeholder={category.referencePlaceholder}
             />
@@ -87,11 +112,19 @@ function EntryForm({ entry, onChange, onRemove, index }) {
           <textarea
             value={entry.notes}
             onChange={(e) => onChange(index, 'notes', e.target.value)}
-            className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none resize-none"
+            disabled={readonly}
+            className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none resize-none disabled:opacity-60"
             style={{ background: 'var(--color-surface-variant)', border: 'none' }}
             placeholder="Describe your work..."
             rows={2}
           />
+        </div>
+      )}
+
+      {isExisting && entry.return_reason && (
+        <div className="mt-3 flex items-start gap-2 px-1">
+          <span className="material-symbols-outlined text-amber-400 flex-shrink-0" style={{ fontSize: '16px' }}>undo</span>
+          <p className="text-xs text-amber-400">{entry.return_reason}</p>
         </div>
       )}
     </div>
@@ -99,12 +132,18 @@ function EntryForm({ entry, onChange, onRemove, index }) {
 }
 
 // ── Collapsible day section ──
-function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, disabled }) {
+function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry }) {
   const [open, setOpen] = useState(true)
   const totalDays = entries.reduce((sum, e) => {
+    if (e._id) {
+      // Existing entry — use stored time_value
+      return sum + (Number(e.time_value) || 0)
+    }
     const tb = TIME_BLOCKS.find((t) => t.value === e.time_block)
     return sum + (tb?.numericValue || 0)
   }, 0)
+
+  const hasEditableEntries = entries.some((e) => e.status !== 'signed_off' && e.status !== 'submitted')
 
   return (
     <div className={`glass-card rounded-2xl overflow-hidden ${!open && entries.length === 0 ? 'opacity-80 hover:opacity-100' : ''} transition-opacity`}>
@@ -132,28 +171,27 @@ function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, di
           )}
           {entries.map((entry, idx) => (
             <EntryForm
-              key={idx}
+              key={entry._id || `new-${idx}`}
               entry={entry}
               index={idx}
+              isExisting={!!entry._id}
               onChange={(i, field, value) => onChangeEntry(day.date, i, field, value)}
-              onRemove={disabled ? null : (i) => onRemoveEntry(day.date, i)}
+              onRemove={(i) => onRemoveEntry(day.date, i)}
             />
           ))}
-          {!disabled && (
-            <button
-              type="button"
-              onClick={() => onAddEntry(day.date)}
-              className="w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
-              style={{
-                background: 'linear-gradient(135deg, rgba(0,201,255,0.08) 0%, rgba(123,47,219,0.08) 100%)',
-                border: '2px dashed rgba(0,201,255,0.3)',
-                color: '#66d3ff',
-              }}
-            >
-              <span className="material-symbols-outlined">add_circle</span>
-              Add entry
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => onAddEntry(day.date)}
+            className="w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
+            style={{
+              background: 'linear-gradient(135deg, rgba(0,201,255,0.08) 0%, rgba(123,47,219,0.08) 100%)',
+              border: '2px dashed rgba(0,201,255,0.3)',
+              color: '#66d3ff',
+            }}
+          >
+            <span className="material-symbols-outlined">add_circle</span>
+            Add entry
+          </button>
         </div>
       )}
     </div>
@@ -164,30 +202,54 @@ function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, di
 export default function TimesheetPage() {
   const [searchParams] = useSearchParams()
   const { user, profile } = useAuth()
-  const { submitEntries, fetchWeekEntries, loading, error } = useEntries()
+  const { submitEntries, updateEntry, deleteEntry, fetchWeekEntries, loading, error } = useEntries()
 
   const [weekEnding, setWeekEnding] = useState(searchParams.get('week') || getCurrentWeekFriday())
   const [client, setClient] = useState(profile?.default_client || '')
   const [includeWeekend, setIncludeWeekend] = useState(false)
   const [entriesByDate, setEntriesByDate] = useState({})
   const [submitStatus, setSubmitStatus] = useState(null)
-  const [existingEntries, setExistingEntries] = useState([])
+  const [loadingWeek, setLoadingWeek] = useState(false)
 
   const weekDates = getWeekDates(weekEnding)
   const visibleDays = includeWeekend ? weekDates : weekDates.filter((d) => !d.isWeekend)
 
+  // Load existing entries into the day sections when week changes
   useEffect(() => {
-    if (user?.id && weekEnding) {
-      fetchWeekEntries(user.id, weekEnding).then((data) => {
-        setExistingEntries(data)
-      })
-    }
-  }, [user?.id, weekEnding, fetchWeekEntries])
+    if (!user?.id || !weekEnding) return
 
-  useEffect(() => {
-    setEntriesByDate({})
+    setLoadingWeek(true)
     setSubmitStatus(null)
-  }, [weekEnding])
+
+    fetchWeekEntries(user.id, weekEnding).then((data) => {
+      if (data.length > 0) {
+        // Group existing entries by date and convert to form format
+        const grouped = {}
+        for (const entry of data) {
+          if (!grouped[entry.entry_date]) grouped[entry.entry_date] = []
+          grouped[entry.entry_date].push({
+            _id: entry.id,               // marker: this is an existing DB entry
+            _original: { ...entry },      // snapshot for dirty checking
+            category: entry.category || '',
+            time_block: entry.time_block || '',
+            time_value: entry.time_value,
+            feature_tag: entry.feature_tag || '',
+            notes: entry.notes || '',
+            status: entry.status,
+            return_reason: entry.return_reason || null,
+          })
+          // Auto-fill client from first entry if not set
+          if (!client && entry.client) {
+            setClient(entry.client)
+          }
+        }
+        setEntriesByDate(grouped)
+      } else {
+        setEntriesByDate({})
+      }
+      setLoadingWeek(false)
+    })
+  }, [user?.id, weekEnding, fetchWeekEntries])
 
   function emptyEntry() {
     return { category: '', time_block: '', feature_tag: '', notes: '' }
@@ -203,7 +265,15 @@ export default function TimesheetPage() {
   function changeEntry(date, index, field, value) {
     setEntriesByDate((prev) => {
       const dayEntries = [...(prev[date] || [])]
-      dayEntries[index] = { ...dayEntries[index], [field]: value }
+      const entry = dayEntries[index]
+      // Don't allow editing submitted/signed_off entries
+      if (entry?.status === 'signed_off' || entry?.status === 'submitted') return prev
+      dayEntries[index] = { ...entry, [field]: value }
+      // If time_block changed on an existing entry, update the time_value too
+      if (field === 'time_block' && entry?._id) {
+        const tb = TIME_BLOCKS.find((t) => t.value === value)
+        if (tb) dayEntries[index].time_value = tb.numericValue
+      }
       return { ...prev, [date]: dayEntries }
     })
   }
@@ -211,21 +281,39 @@ export default function TimesheetPage() {
   function removeEntry(date, index) {
     setEntriesByDate((prev) => {
       const dayEntries = [...(prev[date] || [])]
-      dayEntries.splice(index, 1)
+      const entry = dayEntries[index]
+      // Don't allow removing submitted/signed_off
+      if (entry?.status === 'signed_off' || entry?.status === 'submitted') return prev
+      // If it's an existing entry, mark for deletion instead of splicing
+      if (entry?._id) {
+        dayEntries[index] = { ...entry, _deleted: true }
+      } else {
+        dayEntries.splice(index, 1)
+      }
       return { ...prev, [date]: dayEntries }
     })
   }
 
   function validate() {
     const allEntries = visibleDays.flatMap((day) => {
-      return (entriesByDate[day.date] || []).map((e, i) => ({ ...e, day, index: i }))
+      return (entriesByDate[day.date] || [])
+        .filter((e) => !e._deleted && !e._id) // only validate NEW entries
+        .map((e, i) => ({ ...e, day, index: i }))
     })
 
-    if (allEntries.length === 0) return 'Add at least one entry before submitting.'
+    const newEntries = allEntries.filter((e) => !e._id)
+    // Also validate dirty existing entries
+    const dirtyExisting = visibleDays.flatMap((day) => {
+      return (entriesByDate[day.date] || [])
+        .filter((e) => e._id && !e._deleted && isDirty(e))
+        .map((e, i) => ({ ...e, day, index: i }))
+    })
 
-    for (const entry of allEntries) {
-      if (!entry.category) return `${entry.day.dayName}: Select a category for entry ${entry.index + 1}.`
-      if (!entry.time_block) return `${entry.day.dayName}: Select a time block for entry ${entry.index + 1}.`
+    const toValidate = [...newEntries, ...dirtyExisting]
+
+    for (const entry of toValidate) {
+      if (!entry.category) return `${entry.day.dayName}: Select a category for an entry.`
+      if (!entry.time_block) return `${entry.day.dayName}: Select a time block for an entry.`
 
       const cat = CATEGORIES.find((c) => c.value === entry.category)
       if (cat?.showReference && !entry.feature_tag.trim()) {
@@ -239,6 +327,16 @@ export default function TimesheetPage() {
     return null
   }
 
+  function isDirty(entry) {
+    if (!entry._original) return false
+    return (
+      entry.category !== (entry._original.category || '') ||
+      entry.time_block !== (entry._original.time_block || '') ||
+      entry.feature_tag !== (entry._original.feature_tag || '') ||
+      entry.notes !== (entry._original.notes || '')
+    )
+  }
+
   async function handleSubmit() {
     const validationError = validate()
     if (validationError) {
@@ -246,78 +344,130 @@ export default function TimesheetPage() {
       return
     }
 
-    let counter = existingEntries.length + 1
-    const rows = []
+    try {
+      const updates = []
+      const deletes = []
+      const newRows = []
 
-    for (const day of visibleDays) {
-      const dayEntries = entriesByDate[day.date] || []
-      for (const entry of dayEntries) {
-        const tb = TIME_BLOCKS.find((t) => t.value === entry.time_block)
-        rows.push({
-          user_id: user.id,
-          reference: generateReference(day.date, counter++),
-          client: client,
-          week_ending: weekEnding,
-          day_name: day.dayName,
-          entry_date: day.date,
-          category: entry.category,
-          time_block: entry.time_block,
-          time_value: tb.numericValue,
-          feature_tag: entry.feature_tag || null,
-          notes: entry.notes || null,
-          status: 'draft',
+      // Count existing entries for reference numbering
+      let existingCount = 0
+
+      for (const day of visibleDays) {
+        const dayEntries = entriesByDate[day.date] || []
+        for (const entry of dayEntries) {
+          if (entry._id && entry._deleted) {
+            // Delete this existing entry (only if draft/returned)
+            if (entry.status === 'draft' || entry.status === 'returned') {
+              deletes.push(entry._id)
+            }
+          } else if (entry._id && isDirty(entry)) {
+            // Update this existing entry
+            const tb = TIME_BLOCKS.find((t) => t.value === entry.time_block)
+            updates.push({
+              id: entry._id,
+              changes: {
+                category: entry.category,
+                time_block: entry.time_block,
+                time_value: tb?.numericValue || entry.time_value,
+                feature_tag: entry.feature_tag || null,
+                notes: entry.notes || null,
+              },
+            })
+          }
+          if (entry._id) existingCount++
+        }
+      }
+
+      // Collect new entries
+      let counter = existingCount + 1
+      for (const day of visibleDays) {
+        const dayEntries = entriesByDate[day.date] || []
+        for (const entry of dayEntries) {
+          if (!entry._id && entry.category && entry.time_block) {
+            const tb = TIME_BLOCKS.find((t) => t.value === entry.time_block)
+            newRows.push({
+              user_id: user.id,
+              reference: generateReference(day.date, counter++),
+              client: client,
+              week_ending: weekEnding,
+              day_name: day.dayName,
+              entry_date: day.date,
+              category: entry.category,
+              time_block: entry.time_block,
+              time_value: tb.numericValue,
+              feature_tag: entry.feature_tag || null,
+              notes: entry.notes || null,
+              status: 'draft',
+            })
+          }
+        }
+      }
+
+      // Execute all operations
+      const ops = []
+      for (const del of deletes) {
+        ops.push(deleteEntry(del))
+      }
+      for (const upd of updates) {
+        ops.push(updateEntry(upd.id, upd.changes))
+      }
+      if (newRows.length > 0) {
+        ops.push(submitEntries(newRows))
+      }
+
+      if (ops.length === 0) {
+        setSubmitStatus({ type: 'error', message: 'No changes to save.' })
+        return
+      }
+
+      await Promise.all(ops)
+
+      const parts = []
+      if (newRows.length > 0) parts.push(`${newRows.length} new ${newRows.length === 1 ? 'entry' : 'entries'} created`)
+      if (updates.length > 0) parts.push(`${updates.length} ${updates.length === 1 ? 'entry' : 'entries'} updated`)
+      if (deletes.length > 0) parts.push(`${deletes.length} ${deletes.length === 1 ? 'entry' : 'entries'} deleted`)
+
+      setSubmitStatus({ type: 'success', message: parts.join(', ') + '.' })
+
+      // Reload entries to get fresh state
+      const data = await fetchWeekEntries(user.id, weekEnding)
+      const grouped = {}
+      for (const entry of data) {
+        if (!grouped[entry.entry_date]) grouped[entry.entry_date] = []
+        grouped[entry.entry_date].push({
+          _id: entry.id,
+          _original: { ...entry },
+          category: entry.category || '',
+          time_block: entry.time_block || '',
+          time_value: entry.time_value,
+          feature_tag: entry.feature_tag || '',
+          notes: entry.notes || '',
+          status: entry.status,
+          return_reason: entry.return_reason || null,
         })
       }
-    }
-
-    try {
-      await submitEntries(rows)
-      setSubmitStatus({ type: 'success', message: `${rows.length} entries saved as drafts.` })
-      setEntriesByDate({})
-      const updated = await fetchWeekEntries(user.id, weekEnding)
-      setExistingEntries(updated)
+      setEntriesByDate(grouped)
     } catch (err) {
       setSubmitStatus({ type: 'error', message: err.message })
     }
   }
 
-  const newTotal = visibleDays.reduce((total, day) => {
-    return total + (entriesByDate[day.date] || []).reduce((sum, e) => {
-      const tb = TIME_BLOCKS.find((t) => t.value === e.time_block)
-      return sum + (tb?.numericValue || 0)
-    }, 0)
+  // Calculate totals
+  const allVisible = visibleDays.flatMap((day) => (entriesByDate[day.date] || []).filter((e) => !e._deleted))
+  const totalDays = allVisible.reduce((sum, e) => {
+    if (e._id) return sum + (Number(e.time_value) || 0)
+    const tb = TIME_BLOCKS.find((t) => t.value === e.time_block)
+    return sum + (tb?.numericValue || 0)
   }, 0)
+  const newEntryCount = allVisible.filter((e) => !e._id && e.category && e.time_block).length
+  const dirtyCount = allVisible.filter((e) => e._id && isDirty(e)).length
+  const deletedCount = visibleDays.reduce((sum, day) => {
+    return sum + (entriesByDate[day.date] || []).filter((e) => e._deleted).length
+  }, 0)
+  const hasChanges = newEntryCount > 0 || dirtyCount > 0 || deletedCount > 0
 
-  const existingTotal = existingEntries.reduce((sum, e) => sum + Number(e.time_value), 0)
-
-  // ── Success state ──
-  if (submitStatus?.type === 'success') {
-    return (
-      <div className="max-w-xl mx-auto text-center pt-16 pb-12">
-        <div className="glass-card-accent rounded-2xl p-10 space-y-5">
-          <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center" style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
-            <span className="material-symbols-outlined text-green-400" style={{ fontSize: '32px' }}>check_circle</span>
-          </div>
-          <h2 className="font-headline font-bold text-2xl text-on-surface">Entries saved</h2>
-          <p className="text-on-surface-variant">{submitStatus.message}</p>
-          <p className="text-sm text-on-surface-variant">
-            Your entries are saved as drafts. Review them in{' '}
-            <Link to="/my-entries" className="text-primary hover:underline">My Entries</Link>,
-            then submit when ready.
-          </p>
-          <button
-            onClick={() => {
-              setSubmitStatus(null)
-              setEntriesByDate({})
-            }}
-            className="btn-gradient"
-          >
-            Add more entries
-          </button>
-        </div>
-      </div>
-    )
-  }
+  // Filter out deleted entries for display
+  const visibleEntries = (date) => (entriesByDate[date] || []).filter((e) => !e._deleted)
 
   return (
     <>
@@ -329,14 +479,16 @@ export default function TimesheetPage() {
           <p className="text-on-surface-variant mt-3">Record your time entries for the current week across projects and categories.</p>
         </div>
 
-        {/* Existing entries info banner */}
-        {existingEntries.length > 0 && (
-          <div className="glass-card border-primary/20 rounded-xl p-4 flex items-center gap-3" style={{ background: 'rgba(102,211,255,0.05)' }}>
-            <span className="material-symbols-outlined text-primary">info</span>
-            <p className="text-primary-fixed font-medium text-sm">
-              You already have <strong>{existingEntries.length}</strong> entries for this week
-              totalling <strong>{existingTotal} days</strong>.{' '}
-              <Link to="/my-entries" className="underline hover:no-underline">View them</Link>.
+        {/* Status messages */}
+        {submitStatus && (
+          <div className={`glass-card rounded-xl p-4 flex items-center gap-3 ${
+            submitStatus.type === 'success' ? 'border-green-400/20' : 'border-error/20'
+          }`} style={{ background: submitStatus.type === 'success' ? 'rgba(74,222,128,0.05)' : 'rgba(255,113,108,0.05)' }}>
+            <span className={`material-symbols-outlined ${submitStatus.type === 'success' ? 'text-green-400' : 'text-error'}`}>
+              {submitStatus.type === 'success' ? 'check_circle' : 'error'}
+            </span>
+            <p className={`text-sm font-medium ${submitStatus.type === 'success' ? 'text-green-400' : 'text-error'}`}>
+              {submitStatus.message}
             </p>
           </div>
         )}
@@ -387,24 +539,20 @@ export default function TimesheetPage() {
         </section>
 
         {/* Section 2: Day sections */}
-        <div className="space-y-4">
-          {visibleDays.map((day) => (
-            <DaySection
-              key={day.date}
-              day={day}
-              entries={entriesByDate[day.date] || []}
-              onAddEntry={addEntry}
-              onChangeEntry={changeEntry}
-              onRemoveEntry={removeEntry}
-            />
-          ))}
-        </div>
-
-        {/* Error message */}
-        {submitStatus?.type === 'error' && (
-          <div className="glass-card border-error/20 rounded-xl p-4 flex items-center gap-3" style={{ background: 'rgba(255,113,108,0.05)' }}>
-            <span className="material-symbols-outlined text-error">error</span>
-            <p className="text-error text-sm font-medium">{submitStatus.message}</p>
+        {loadingWeek ? (
+          <LoadingSpinner message="Loading week entries..." />
+        ) : (
+          <div className="space-y-4">
+            {visibleDays.map((day) => (
+              <DaySection
+                key={day.date}
+                day={day}
+                entries={visibleEntries(day.date)}
+                onAddEntry={addEntry}
+                onChangeEntry={changeEntry}
+                onRemoveEntry={removeEntry}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -414,25 +562,33 @@ export default function TimesheetPage() {
         <div style={{ background: 'var(--color-surface-container-low)', backdropFilter: 'blur(24px)', borderTop: 'var(--glass-border)', boxShadow: '0 -4px 30px var(--glass-border-subtle)' }}>
           <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-[10px] uppercase tracking-widest text-outline font-bold">Current Draft</span>
+              <span className="text-[10px] uppercase tracking-widest text-outline font-bold">Week total</span>
               <span className="text-on-surface-variant font-medium text-sm">
-                New entries: <span className="text-primary font-bold">{newTotal} days</span>
+                <span className="text-primary font-bold">{totalDays} days</span>
+                {hasChanges && (
+                  <span className="text-on-surface-variant ml-2">
+                    ({[
+                      newEntryCount > 0 && `${newEntryCount} new`,
+                      dirtyCount > 0 && `${dirtyCount} edited`,
+                      deletedCount > 0 && `${deletedCount} removed`,
+                    ].filter(Boolean).join(', ')})
+                  </span>
+                )}
               </span>
             </div>
             <div className="flex items-center gap-4">
-              <button
-                type="button"
-                disabled={loading}
-                className="px-6 py-3 rounded-xl font-bold text-on-surface-variant hover:text-white transition-colors"
+              <Link
+                to="/my-entries"
+                className="px-6 py-3 rounded-xl font-bold text-on-surface-variant hover:text-on-surface transition-colors"
               >
-                Discard
-              </button>
+                Back to entries
+              </Link>
               <button
                 onClick={handleSubmit}
-                disabled={loading || newTotal === 0 || !client.trim()}
+                disabled={loading || !hasChanges || !client.trim()}
                 className="signature-gradient-bg px-8 py-3 rounded-xl font-bold text-white shadow-glow hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-40 disabled:transform-none disabled:shadow-none disabled:cursor-not-allowed"
               >
-                {loading ? 'Saving...' : 'Save entries'}
+                {loading ? 'Saving...' : 'Save changes'}
               </button>
             </div>
           </div>
