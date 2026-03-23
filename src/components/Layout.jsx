@@ -71,9 +71,9 @@ export default function Layout({ children }) {
                   <Link
                     key={item.to}
                     to={item.to}
-                    className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
+                    className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all duration-200 nav-active-item ${
                       isActive
-                        ? 'text-on-surface'
+                        ? 'active'
                         : 'text-on-surface-variant hover:text-on-surface hover:bg-[var(--white-alpha-5)]'
                     }`}
                     style={isActive ? {
