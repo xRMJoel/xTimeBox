@@ -210,9 +210,15 @@ export default function MyEntriesPage() {
               <div className="flex items-center gap-3">
                 {allSignedOff && <StatusBadge status="signed_off" />}
                 {hasDrafts && !allSignedOff && (
-                  <button onClick={() => handleSubmitWeek(weekEnding)} className="btn-gradient text-sm">
-                    {hasReturned ? 'Resubmit week' : 'Submit week'}
-                  </button>
+                  <>
+                    <a href={`/timesheet?week=${weekEnding}`} className="text-sm font-medium text-primary hover:text-primary-light transition-colors flex items-center gap-1">
+                      <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add_circle</span>
+                      Add entry
+                    </a>
+                    <button onClick={() => handleSubmitWeek(weekEnding)} className="btn-gradient text-sm">
+                      {hasReturned ? 'Resubmit week' : 'Submit week'}
+                    </button>
+                  </>
                 )}
               </div>
             </div>

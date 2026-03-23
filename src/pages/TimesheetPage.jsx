@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useEntries } from '../hooks/useEntries'
 import {
@@ -161,10 +162,11 @@ function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, di
 
 // ── Main page ──
 export default function TimesheetPage() {
+  const [searchParams] = useSearchParams()
   const { user, profile } = useAuth()
   const { submitEntries, fetchWeekEntries, loading, error } = useEntries()
 
-  const [weekEnding, setWeekEnding] = useState(getCurrentWeekFriday())
+  const [weekEnding, setWeekEnding] = useState(searchParams.get('week') || getCurrentWeekFriday())
   const [client, setClient] = useState(profile?.default_client || '')
   const [includeWeekend, setIncludeWeekend] = useState(false)
   const [entriesByDate, setEntriesByDate] = useState({})
