@@ -97,8 +97,8 @@ export default function Layout({ children }) {
                 className="p-2 rounded-full text-on-surface-variant hover:text-on-surface hover:bg-[var(--white-alpha-5)] transition-all duration-300"
                 title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
-                  {theme === 'dark' ? 'light_mode' : 'dark_mode'}
+                <span className="material-symbols-outlined" style={{ fontSize: '22px', fontVariationSettings: "'FILL' 1" }}>
+                  {theme === 'dark' ? 'light_mode' : 'nightlight'}
                 </span>
               </button>
 
