@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useEntries } from '../hooks/useEntries'
+import { supabase } from '../lib/supabase'
 import {
   CATEGORIES,
   TIME_BLOCKS,
@@ -205,11 +206,34 @@ export default function TimesheetPage() {
   const { submitEntries, updateEntry, deleteEntry, fetchWeekEntries, loading, error } = useEntries()
 
   const [weekEnding, setWeekEnding] = useState(searchParams.get('week') || getCurrentWeekFriday())
-  const [client, setClient] = useState(profile?.default_client || '')
+  const [selectedProjectId, setSelectedProjectId] = useState('')
+  const [userProjects, setUserProjects] = useState([])
   const [includeWeekend, setIncludeWeekend] = useState(false)
   const [entriesByDate, setEntriesByDate] = useState({})
   const [submitStatus, setSubmitStatus] = useState(null)
   const [loadingWeek, setLoadingWeek] = useState(false)
+
+  // Load user's assigned projects
+  useEffect(() => {
+    if (!user?.id) return
+    supabase
+      .from('user_projects')
+      .select('project_id, projects(id, name, client, status)')
+      .eq('user_id', user.id)
+      .then(({ data }) => {
+        const active = (data || [])
+          .map((up) => up.projects)
+          .filter((p) => p && p.status === 'active')
+        setUserProjects(active)
+        // Auto-select first project if none selected
+        if (!selectedProjectId && active.length === 1) {
+          setSelectedProjectId(active[0].id)
+        }
+      })
+  }, [user?.id])
+
+  const selectedProject = userProjects.find((p) => p.id === selectedProjectId)
+  const client = selectedProject?.client || ''
 
   const weekDates = getWeekDates(weekEnding)
   const visibleDays = includeWeekend ? weekDates : weekDates.filter((d) => !d.isWeekend)
@@ -238,9 +262,9 @@ export default function TimesheetPage() {
             status: entry.status,
             return_reason: entry.return_reason || null,
           })
-          // Auto-fill client from first entry if not set
-          if (!client && entry.client) {
-            setClient(entry.client)
+          // Auto-select project from first entry if not set
+          if (!selectedProjectId && entry.project_id) {
+            setSelectedProjectId(entry.project_id)
           }
         }
         setEntriesByDate(grouped)
@@ -389,6 +413,7 @@ export default function TimesheetPage() {
               user_id: user.id,
               reference: generateReference(day.date, counter++),
               client: client,
+              project_id: selectedProjectId || null,
               week_ending: weekEnding,
               day_name: day.dayName,
               entry_date: day.date,
@@ -507,15 +532,22 @@ export default function TimesheetPage() {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Client</label>
-              <input
-                type="text"
-                value={client}
-                onChange={(e) => setClient(e.target.value)}
-                className="w-full bg-white/5 border-outline-variant rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-on-surface placeholder:text-slate-600"
-                style={{ background: 'var(--glass-bg)', borderColor: 'var(--color-outline-variant)' }}
-                placeholder="Select or enter client name"
-              />
+              <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Project</label>
+              {userProjects.length > 0 ? (
+                <select
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                  className="w-full bg-white/5 border-outline-variant rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-on-surface"
+                  style={{ background: 'var(--glass-bg)', borderColor: 'var(--color-outline-variant)' }}
+                >
+                  <option value="">Select project</option>
+                  {userProjects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.client})</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm text-on-surface-variant py-3">No projects assigned. Ask an admin to assign you to a project.</p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -585,7 +617,7 @@ export default function TimesheetPage() {
               </Link>
               <button
                 onClick={handleSubmit}
-                disabled={loading || !hasChanges || !client.trim()}
+                disabled={loading || !hasChanges || !selectedProjectId}
                 className="signature-gradient-bg px-8 py-3 rounded-xl font-bold text-white shadow-glow hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-40 disabled:transform-none disabled:shadow-none disabled:cursor-not-allowed"
               >
                 {loading ? 'Saving...' : 'Save changes'}
