@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useTheme } from '../hooks/useTheme'
 
 export default function RegisterPage() {
+  const { theme } = useTheme()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -70,7 +72,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
       {/* Logo */}
       <div className="mb-8 text-center">
-        <Link to="/login"><img src="/logo.png" alt="xTimeBox" className="h-14 mx-auto mb-4" /></Link>
+        <Link to="/login"><img src={theme === 'light' ? '/logo-light.png' : '/logo.png'} alt="xTimeBox" className="h-14 mx-auto mb-4" /></Link>
         <p className="text-on-surface-variant text-base">Create your account</p>
       </div>
 

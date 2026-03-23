@@ -18,6 +18,12 @@ export function ThemeProvider({ children }) {
     } else {
       root.classList.remove('light')
     }
+    // Swap favicon to match theme
+    const favicon = document.querySelector('link[rel="icon"]')
+    if (favicon) {
+      favicon.href = theme === 'light' ? '/favicon-light.png' : '/favicon.png'
+    }
+
     try {
       localStorage.setItem('xtimebox-theme', theme)
     } catch {

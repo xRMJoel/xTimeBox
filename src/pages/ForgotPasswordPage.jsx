@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useTheme } from '../hooks/useTheme'
 
 export default function ForgotPasswordPage() {
+  const { theme } = useTheme()
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
@@ -61,7 +63,7 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-4">
       {/* Logo */}
       <div className="mb-8 text-center">
-        <Link to="/login"><img src="/logo.png" alt="xTimeBox" className="h-14 mx-auto mb-4" /></Link>
+        <Link to="/login"><img src={theme === 'light' ? '/logo-light.png' : '/logo.png'} alt="xTimeBox" className="h-14 mx-auto mb-4" /></Link>
         <p className="text-on-surface-variant text-base">Reset your password</p>
       </div>
 

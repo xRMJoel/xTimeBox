@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
+import { useTheme } from '../hooks/useTheme'
 
 export default function CompleteProfilePage() {
   const { profile, user, refreshProfile } = useAuth()
+  const { theme } = useTheme()
   const navigate = useNavigate()
 
   const meta = user?.user_metadata || {}
@@ -66,7 +68,7 @@ export default function CompleteProfilePage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
       {/* Logo */}
       <div className="mb-8 text-center">
-        <Link to="/home"><img src="/logo.png" alt="xTimeBox" className="h-14 mx-auto mb-4" /></Link>
+        <Link to="/home"><img src={theme === 'light' ? '/logo-light.png' : '/logo.png'} alt="xTimeBox" className="h-14 mx-auto mb-4" /></Link>
         <h1 className="font-headline font-black text-2xl text-on-surface mt-4">Complete your profile</h1>
         <p className="text-on-surface-variant text-base mt-2">
           Just a few details before you get started.

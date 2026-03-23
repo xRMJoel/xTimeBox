@@ -49,9 +49,9 @@ export default function Layout({ children }) {
       >
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex items-center justify-between h-20 relative">
-            {/* Gradient logo */}
+            {/* Gradient logo — swaps for light mode variant */}
             <Link to="/home" className="flex items-center">
-              <img src="/logo.png" alt="xTimeBox" className="h-10" />
+              <img src={theme === 'light' ? '/logo-light.png' : '/logo.png'} alt="xTimeBox" className="h-10" />
             </Link>
 
             {/* Nav - centred (desktop) */}
