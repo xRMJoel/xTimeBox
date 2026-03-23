@@ -225,7 +225,7 @@ function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, us
 export default function TimesheetPage() {
   const [searchParams] = useSearchParams()
   const { user, profile } = useAuth()
-  const { submitEntries, updateEntry, deleteEntry, fetchWeekEntries, loading, error } = useEntries()
+  const { submitEntries, updateEntry, deleteEntry, fetchWeekEntries, submitWeek, loading, error } = useEntries()
 
   const [weekEnding, setWeekEnding] = useState(searchParams.get('week') || getCurrentWeekFriday())
   const [userProjects, setUserProjects] = useState([])
@@ -380,7 +380,7 @@ export default function TimesheetPage() {
     const validationError = validate()
     if (validationError) {
       setSubmitStatus({ type: 'error', message: validationError })
-      return
+      return false
     }
 
     try {
@@ -461,7 +461,7 @@ export default function TimesheetPage() {
 
       if (ops.length === 0) {
         setSubmitStatus({ type: 'error', message: 'No changes to save.' })
-        return
+        return false
       }
 
       await Promise.all(ops)
@@ -474,6 +474,43 @@ export default function TimesheetPage() {
       setSubmitStatus({ type: 'success', message: parts.join(', ') + '.' })
 
       // Reload entries to get fresh state
+      const data = await fetchWeekEntries(user.id, weekEnding)
+      const grouped = {}
+      for (const entry of data) {
+        if (!grouped[entry.entry_date]) grouped[entry.entry_date] = []
+        grouped[entry.entry_date].push({
+          _id: entry.id,
+          _original: { ...entry },
+          category: entry.category || '',
+          time_block: entry.time_block || '',
+          time_value: entry.time_value,
+          feature_tag: entry.feature_tag || '',
+          notes: entry.notes || '',
+          project_id: entry.project_id || '',
+          status: entry.status,
+          return_reason: entry.return_reason || null,
+        })
+      }
+      setEntriesByDate(grouped)
+      return true
+    } catch (err) {
+      setSubmitStatus({ type: 'error', message: err.message })
+      return false
+    }
+  }
+
+  async function handleSubmitWeek() {
+    // Save any pending changes first
+    if (hasChanges) {
+      const saved = await handleSubmit()
+      if (!saved) return // validation or save failed
+    }
+
+    try {
+      await submitWeek(user.id, weekEnding)
+      setSubmitStatus({ type: 'success', message: 'Week submitted for approval.' })
+
+      // Reload to reflect new statuses
       const data = await fetchWeekEntries(user.id, weekEnding)
       const grouped = {}
       for (const entry of data) {
@@ -510,6 +547,8 @@ export default function TimesheetPage() {
     return sum + (entriesByDate[day.date] || []).filter((e) => e._deleted).length
   }, 0)
   const hasChanges = newEntryCount > 0 || dirtyCount > 0 || deletedCount > 0
+  const submittableCount = allVisible.filter((e) => e._id && (e.status === 'draft' || e.status === 'returned')).length
+  const hasSubmittable = submittableCount > 0 || newEntryCount > 0
 
   // Filter out deleted entries for display
   const visibleEntries = (date) => (entriesByDate[date] || []).filter((e) => !e._deleted)
@@ -611,19 +650,29 @@ export default function TimesheetPage() {
                 )}
               </span>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <Link
                 to="/my-entries"
-                className="px-6 py-3 rounded-xl font-bold text-on-surface-variant hover:text-on-surface transition-colors"
+                className="px-5 py-3 rounded-xl font-bold text-on-surface-variant hover:text-on-surface transition-colors"
               >
                 Back to entries
               </Link>
+              {hasChanges && (
+                <button
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="px-6 py-3 rounded-xl font-bold text-on-surface border transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40 disabled:transform-none disabled:cursor-not-allowed"
+                  style={{ borderColor: 'var(--color-outline-variant)', background: 'var(--glass-bg)' }}
+                >
+                  {loading ? 'Saving...' : 'Save draft'}
+                </button>
+              )}
               <button
-                onClick={handleSubmit}
-                disabled={loading || !hasChanges}
-                className="signature-gradient-bg px-8 py-3 rounded-xl font-bold text-white shadow-glow hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-40 disabled:transform-none disabled:shadow-none disabled:cursor-not-allowed"
+                onClick={handleSubmitWeek}
+                disabled={loading || (!hasSubmittable && !hasChanges)}
+                className="signature-gradient-bg px-6 py-3 rounded-xl font-bold text-white shadow-glow hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-40 disabled:transform-none disabled:shadow-none disabled:cursor-not-allowed"
               >
-                {loading ? 'Saving...' : 'Save changes'}
+                {loading ? 'Submitting...' : 'Submit week'}
               </button>
             </div>
           </div>
