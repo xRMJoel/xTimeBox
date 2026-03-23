@@ -89,11 +89,11 @@ function UserDetail({ userId, userName, monthStart, onBack }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <button onClick={onBack} className="text-base text-on-surface-variant hover:text-white transition-colors flex items-center gap-1">
+        <button onClick={onBack} className="text-base text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-1">
           <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>chevron_left</span> Back
         </button>
         <div>
-          <h2 className="font-headline font-black text-3xl text-white">{userName}</h2>
+          <h2 className="font-headline font-black text-3xl text-on-surface">{userName}</h2>
           <p className="text-base text-on-surface-variant">{getMonthLabel(monthStart)} · {totalDays} days total</p>
         </div>
       </div>
@@ -123,7 +123,7 @@ function UserDetail({ userId, userName, monthStart, onBack }) {
         ) : (
           <>
             <div>
-              <p className="text-sm text-white">Not yet signed off</p>
+              <p className="text-sm text-on-surface">Not yet signed off</p>
               <p className="text-xs text-on-surface-variant">{entries.length} entries for this month</p>
             </div>
             <button onClick={handleSignOff} disabled={actionLoading || entries.length === 0}
@@ -148,9 +148,9 @@ function UserDetail({ userId, userName, monthStart, onBack }) {
 
         return (
           <div key={weekEnding} className="glass-card rounded-2xl overflow-hidden">
-            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(0,201,255,0.12)', background: 'linear-gradient(135deg, rgba(0,201,255,0.04) 0%, rgba(123,47,219,0.04) 100%)' }}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: 'var(--week-header-border)', background: 'var(--week-header-bg)' }}>
               <div className="flex items-center justify-between flex-1">
-                <span className="text-base font-medium text-white">Week ending {formatDate(weekEnding)}</span>
+                <span className="text-base font-medium text-on-surface">Week ending {formatDate(weekEnding)}</span>
                 {weekEntries.some(e => e.status === 'submitted') && (
                   <button
                     onClick={() => setReturningWeek(weekEnding)}
@@ -163,10 +163,10 @@ function UserDetail({ userId, userName, monthStart, onBack }) {
               </div>
               <span className="text-base font-bold text-primary">{weekTotal} days</span>
             </div>
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-[var(--glass-border-subtle)]">
               {sortedDays.map((date) => (
                 <div key={date} className="px-6 py-4">
-                  <div className="text-base font-medium text-white mb-2">{dayGroups[date][0].day_name}, {formatDate(date)}</div>
+                  <div className="text-base font-medium text-on-surface mb-2">{dayGroups[date][0].day_name}, {formatDate(date)}</div>
                   <div className="space-y-2">
                     {dayGroups[date].map((entry) => <EntryCard key={entry.id} entry={entry} readonly />)}
                   </div>
@@ -184,7 +184,7 @@ function UserDetail({ userId, userName, monthStart, onBack }) {
               <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)' }}>
                 <span className="material-symbols-outlined text-amber-400" style={{ fontSize: '18px' }}>undo</span>
               </div>
-              <h3 className="font-headline font-bold text-xl text-white">Return entries</h3>
+              <h3 className="font-headline font-bold text-xl text-on-surface">Return entries</h3>
             </div>
             <p className="text-sm text-on-surface-variant">
               Return week ending {formatDate(returningWeek)} to {userName} for editing. Optionally add a reason.
@@ -248,7 +248,7 @@ function InviteModal({ onClose, onInvited }) {
           <div className="icon-badge-gradient w-8 h-8" style={{ borderRadius: '8px' }}>
             <span className="material-symbols-outlined text-white" style={{ fontSize: '18px' }}>person_add</span>
           </div>
-          <h3 className="font-headline font-bold text-xl text-white">Invite user</h3>
+          <h3 className="font-headline font-bold text-xl text-on-surface">Invite user</h3>
         </div>
         {error && (
           <div className="rounded-xl px-4 py-3 text-sm flex items-center gap-2" style={{ background: 'rgba(255,113,108,0.06)', border: '1px solid rgba(255,113,108,0.2)', color: '#ff716c' }}>
@@ -322,7 +322,7 @@ export default function AdminPage() {
       <div>
         <p className="text-[10px] font-bold text-outline mb-2 uppercase tracking-[0.2em]">Resource Management</p>
         <div className="flex items-center justify-between">
-          <h1 className="text-5xl font-black font-headline text-white tracking-tight">Review Timesheets</h1>
+          <h1 className="text-5xl font-black font-headline text-on-surface tracking-tight">Review Timesheets</h1>
           <button onClick={() => setShowInvite(true)} className="btn-gradient text-sm flex items-center gap-2">
             <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>person_add</span>
             Invite user
@@ -344,14 +344,14 @@ export default function AdminPage() {
 
       {/* Month navigator */}
       <div className="glass-card-accent rounded-2xl p-6 flex items-center justify-center gap-6">
-        <button onClick={() => setMonthStart(shiftMonth(monthStart, -1))} className="text-on-surface-variant hover:text-white transition-colors p-2 rounded-full hover:bg-white/5">
+        <button onClick={() => setMonthStart(shiftMonth(monthStart, -1))} className="text-on-surface-variant hover:text-on-surface transition-colors p-2 rounded-full hover:bg-[var(--white-alpha-5)]">
           <span className="material-symbols-outlined">chevron_left</span>
         </button>
         <div className="text-center min-w-[200px]">
-          <p className="font-headline font-black text-white text-2xl">{getMonthLabel(monthStart)}</p>
+          <p className="font-headline font-black text-on-surface text-2xl">{getMonthLabel(monthStart)}</p>
           <p className="text-[10px] text-outline mt-1 uppercase tracking-widest font-bold">Reviewing {summary.length} active members</p>
         </div>
-        <button onClick={() => setMonthStart(shiftMonth(monthStart, 1))} className="text-on-surface-variant hover:text-white transition-colors p-2 rounded-full hover:bg-white/5">
+        <button onClick={() => setMonthStart(shiftMonth(monthStart, 1))} className="text-on-surface-variant hover:text-on-surface transition-colors p-2 rounded-full hover:bg-[var(--white-alpha-5)]">
           <span className="material-symbols-outlined">chevron_right</span>
         </button>
       </div>
@@ -412,7 +412,7 @@ export default function AdminPage() {
         <div className="glass-card rounded-2xl overflow-hidden">
           <table className="w-full text-base">
             <thead>
-              <tr style={{ borderBottom: '1px solid rgba(0,201,255,0.12)', background: 'linear-gradient(135deg, rgba(0,201,255,0.04) 0%, rgba(123,47,219,0.04) 100%)' }}>
+              <tr style={{ borderBottom: 'var(--week-header-border)', background: 'var(--week-header-bg)' }}>
                 <th className="text-left px-6 py-3 text-[10px] font-bold text-outline uppercase tracking-widest">Name & Identity</th>
                 <th className="text-right px-6 py-3 text-[10px] font-bold text-outline uppercase tracking-widest">Total Days</th>
                 <th className="text-right px-6 py-3 text-[10px] font-bold text-outline uppercase tracking-widest">Entries</th>
@@ -420,16 +420,16 @@ export default function AdminPage() {
                 <th className="text-right px-6 py-3 text-[10px] font-bold text-outline uppercase tracking-widest">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-[var(--glass-border-subtle)]">
               {summary.map((row) => (
-                <tr key={row.user_id} className="hover:bg-white/[0.02] transition-colors">
+                <tr key={row.user_id} className="hover:bg-[var(--white-alpha-5)] transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-full signature-gradient-bg flex items-center justify-center text-white text-sm font-bold">
                         {row.full_name.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <div className="font-medium text-white text-base">{row.full_name}</div>
+                        <div className="font-medium text-on-surface text-base">{row.full_name}</div>
                         <div className="text-sm text-on-surface-variant">{row.email}</div>
                       </div>
                     </div>
@@ -460,8 +460,8 @@ export default function AdminPage() {
             </tbody>
           </table>
 
-          <div className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            <p className="text-white font-bold text-sm">
+          <div className="px-6 py-4 flex justify-end" style={{ borderTop: 'var(--divider)' }}>
+            <p className="text-on-surface font-bold text-sm">
               Total across all users: <span className="text-primary">{summary.reduce((sum, r) => sum + Number(r.total_days), 0)} days</span>
             </p>
           </div>

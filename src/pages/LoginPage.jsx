@@ -50,7 +50,7 @@ export default function LoginPage() {
       <div className="glass-card-accent rounded-2xl w-full max-w-md p-8 space-y-5">
         {error && (
           <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm"
-            style={{ background: 'rgba(255,113,108,0.06)', border: '1px solid rgba(255,113,108,0.2)', color: '#ff716c' }}>
+            style={{ background: 'rgba(255,113,108,0.06)', border: 'var(--color-outline-variant)', color: '#ff716c' }}>
             <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>error</span>
             {error}
           </div>
@@ -112,9 +112,9 @@ export default function LoginPage() {
 
         {/* Divider */}
         <div className="flex items-center gap-3">
-          <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }}></div>
+          <div className="flex-1 h-px" style={{ background: 'var(--glass-border-subtle)' }}></div>
           <span className="text-[10px] font-bold text-outline uppercase tracking-widest">Or continue with</span>
-          <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }}></div>
+          <div className="flex-1 h-px" style={{ background: 'var(--glass-border-subtle)' }}></div>
         </div>
 
         {/* Social login */}
@@ -122,7 +122,7 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={handleGoogleLogin}
-            className="glass-card-inset flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant transition-all hover:text-white hover:bg-white/5"
+            className="glass-card-inset flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-on-surface-variant transition-all hover:text-on-surface hover:bg-[var(--white-alpha-5)]"
           >
             <svg width="16" height="16" viewBox="0 0 16 16">
               <path d="M15.68 8.18c0-.57-.05-1.12-.15-1.64H8v3.1h4.3a3.68 3.68 0 01-1.6 2.41v2h2.58c1.51-1.39 2.38-3.44 2.38-5.87z" fill="#4285F4"/>

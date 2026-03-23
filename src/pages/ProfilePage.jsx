@@ -92,7 +92,7 @@ export default function ProfilePage() {
     <div className="max-w-5xl mx-auto space-y-8">
       <div>
         <p className="text-[10px] font-bold text-outline mb-2 uppercase tracking-[0.2em]">Account Settings</p>
-        <h1 className="text-5xl font-black font-headline text-white tracking-tight">My Profile</h1>
+        <h1 className="text-5xl font-black font-headline text-on-surface tracking-tight">My Profile</h1>
         <p className="text-on-surface-variant mt-3">Manage your personal details, preferences and account information.</p>
       </div>
 
@@ -128,7 +128,7 @@ export default function ProfilePage() {
           </div>
 
           <div className="flex-1">
-            <h2 className="font-headline font-bold text-2xl text-white">{fullName || 'Your Name'}</h2>
+            <h2 className="font-headline font-bold text-2xl text-on-surface">{fullName || 'Your Name'}</h2>
             <p className="text-base text-on-surface-variant">{user?.email}</p>
             {memberSince && <p className="text-sm text-outline mt-1">Member since {memberSince}</p>}
             <div className="flex items-center gap-3 mt-3">
@@ -154,7 +154,7 @@ export default function ProfilePage() {
             <div className="icon-badge-gradient w-8 h-8" style={{ borderRadius: '8px' }}>
               <span className="material-symbols-outlined text-white" style={{ fontSize: '18px' }}>person</span>
             </div>
-            <h3 className="font-headline font-bold text-xl text-white">Details</h3>
+            <h3 className="font-headline font-bold text-xl text-on-surface">Details</h3>
           </div>
           {!editing && (
             <button type="button" onClick={() => setEditing(true)} className="text-sm text-primary hover:text-primary-dim transition-colors font-medium">
@@ -193,19 +193,19 @@ export default function ProfilePage() {
           <div className="grid grid-cols-2 gap-6">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-1">Full Name</p>
-              <p className="text-base text-white">{profile?.full_name || '-'}</p>
+              <p className="text-base text-on-surface">{profile?.full_name || '-'}</p>
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-1">Email</p>
-              <p className="text-base text-white">{user?.email || '-'}</p>
+              <p className="text-base text-on-surface">{user?.email || '-'}</p>
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-1">Phone</p>
-              <p className="text-base text-white">{profile?.phone || '-'}</p>
+              <p className="text-base text-on-surface">{profile?.phone || '-'}</p>
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-1">Company</p>
-              <p className="text-base text-white">{profile?.company || '-'}</p>
+              <p className="text-base text-on-surface">{profile?.company || '-'}</p>
             </div>
           </div>
         )}
@@ -217,16 +217,16 @@ export default function ProfilePage() {
           <div className="icon-badge-gradient w-8 h-8" style={{ borderRadius: '8px' }}>
             <span className="material-symbols-outlined text-white" style={{ fontSize: '18px' }}>shield</span>
           </div>
-          <h3 className="font-headline font-bold text-xl text-white">Account</h3>
+          <h3 className="font-headline font-bold text-xl text-on-surface">Account</h3>
         </div>
         <div className="grid grid-cols-2 gap-6">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-1">Role</p>
-            <p className="text-base text-white capitalize">{profile?.role?.replace('_', ' ') || 'User'}</p>
+            <p className="text-base text-on-surface capitalize">{profile?.role?.replace('_', ' ') || 'User'}</p>
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-1">Default Client</p>
-            <p className="text-base text-white">{profile?.default_client || 'Not set'}</p>
+            <p className="text-base text-on-surface">{profile?.default_client || 'Not set'}</p>
           </div>
         </div>
       </div>
@@ -241,13 +241,13 @@ export default function ProfilePage() {
                 <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(102,211,255,0.1)' }}>
                   <span className="material-symbols-outlined text-primary" style={{ fontSize: '22px' }}>image</span>
                 </div>
-                <h3 className="font-headline font-bold text-lg text-white">Upload profile photo</h3>
+                <h3 className="font-headline font-bold text-lg text-on-surface">Upload profile photo</h3>
               </div>
               <p className="text-sm text-on-surface-variant">Choose an image to use as your profile photo. This will be visible to other users.</p>
               <div className="glass-card-inset rounded-xl px-4 py-3 text-sm">
                 <p className="text-primary font-medium text-xs mb-1">Requirements:</p>
                 <ul className="text-on-surface-variant space-y-0.5 text-xs">
-                  <li>Maximum file size: <span className="text-white font-medium">2 MB</span></li>
+                  <li>Maximum file size: <span className="text-on-surface font-medium">2 MB</span></li>
                   <li>Accepted formats: JPG, PNG, GIF, WebP</li>
                   <li>Square images work best</li>
                 </ul>

@@ -7,29 +7,30 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Stitch surface palette
+        // Theme-aware surface palette (reads CSS variables)
         surface: {
-          DEFAULT: '#070d1f',
-          dim: '#070d1f',
-          container: '#11192e',
-          'container-low': '#0c1326',
-          'container-high': '#171f36',
-          'container-highest': '#1c253e',
-          bright: '#222b47',
-          variant: '#1c253e',
+          DEFAULT: 'var(--color-surface)',
+          dim: 'var(--color-surface)',
+          container: 'var(--color-surface-container)',
+          'container-low': 'var(--color-surface-container-low)',
+          'container-high': 'var(--color-surface-container-high)',
+          'container-highest': 'var(--color-surface-container-highest)',
+          bright: 'var(--color-surface-bright)',
+          variant: 'var(--color-surface-variant)',
         },
         // Primary cyan
         primary: {
-          DEFAULT: '#66d3ff',
-          dim: '#00b9eb',
+          DEFAULT: 'var(--color-primary)',
+          dim: 'var(--color-primary-dim)',
           fixed: '#00c8fd',
           'fixed-dim': '#00b9eb',
           container: '#00c8fd',
+          light: 'var(--color-primary)',
         },
         // Secondary purple
         secondary: {
-          DEFAULT: '#b685ff',
-          dim: '#924bf3',
+          DEFAULT: 'var(--color-secondary)',
+          dim: 'var(--color-secondary-dim)',
           container: '#6606c7',
           fixed: '#e0c7ff',
           'fixed-dim': '#d5b6ff',
@@ -42,19 +43,19 @@ export default {
         },
         // Semantic
         error: {
-          DEFAULT: '#ff716c',
-          dim: '#d7383b',
+          DEFAULT: 'var(--color-error)',
+          dim: 'var(--color-error-dim)',
           container: '#9f0519',
         },
         // Outline
         outline: {
-          DEFAULT: '#6f758b',
-          variant: '#41475b',
+          DEFAULT: 'var(--color-outline)',
+          variant: 'var(--color-outline-variant)',
         },
         // On-surface text
         'on-surface': {
-          DEFAULT: '#dfe4fe',
-          variant: '#a5aac2',
+          DEFAULT: 'var(--color-on-surface)',
+          variant: 'var(--color-on-surface-variant)',
         },
         // Legacy compat aliases
         cyan: {

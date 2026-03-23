@@ -2,6 +2,143 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme variables ── */
+:root {
+  /* Surfaces */
+  --color-bg: #070d1f;
+  --color-surface: #070d1f;
+  --color-surface-container: #11192e;
+  --color-surface-container-low: #0c1326;
+  --color-surface-container-high: #171f36;
+  --color-surface-container-highest: #1c253e;
+  --color-surface-bright: #222b47;
+  --color-surface-variant: #1c253e;
+
+  /* Text */
+  --color-on-surface: #dfe4fe;
+  --color-on-surface-variant: #a5aac2;
+
+  /* Outline */
+  --color-outline: #6f758b;
+  --color-outline-variant: #41475b;
+
+  /* Primary */
+  --color-primary: #66d3ff;
+  --color-primary-dim: #00b9eb;
+
+  /* Secondary */
+  --color-secondary: #b685ff;
+  --color-secondary-dim: #924bf3;
+
+  /* Error */
+  --color-error: #ff716c;
+  --color-error-dim: #d7383b;
+
+  /* Glass & overlays */
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-bg-inset: rgba(255, 255, 255, 0.02);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-border-subtle: rgba(255, 255, 255, 0.05);
+  --card-shadow: 0 8px 32px rgba(0,0,0,0.3);
+
+  /* Input */
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --input-border: rgba(255,255,255,0.08);
+  --input-placeholder: #41475b;
+  --input-option-bg: #11192e;
+
+  /* Accents */
+  --accent-glow: rgba(0,201,255,0.15);
+  --accent-glow-subtle: rgba(0,201,255,0.08);
+  --grid-line: rgba(102, 211, 255, 0.02);
+  --divider: rgba(255,255,255,0.05);
+
+  /* Toggle */
+  --toggle-bg: #1c253e;
+  --toggle-knob: #6f758b;
+
+  /* Scrollbar */
+  --scrollbar-thumb: #41475b;
+  --scrollbar-thumb-hover: #6f758b;
+
+  /* Button disabled */
+  --btn-disabled-bg: #334155;
+
+  /* Header */
+  --header-bg: rgba(7, 13, 31, 0.7);
+  --header-border: rgba(0,201,255,0.12);
+
+  /* Week header accent */
+  --week-header-bg: linear-gradient(135deg, rgba(0,201,255,0.04) 0%, rgba(123,47,219,0.04) 100%);
+  --week-header-border: rgba(0,201,255,0.12);
+
+  /* Misc */
+  --modal-overlay: rgba(0,0,0,0.6);
+  --white-alpha-5: rgba(255,255,255,0.05);
+  --white-alpha-2: rgba(255,255,255,0.02);
+}
+
+/* ── Light theme overrides ── */
+:root.light {
+  --color-bg: #f5f7fa;
+  --color-surface: #f5f7fa;
+  --color-surface-container: #ffffff;
+  --color-surface-container-low: #f0f2f5;
+  --color-surface-container-high: #e8eaf0;
+  --color-surface-container-highest: #dde0e8;
+  --color-surface-bright: #ffffff;
+  --color-surface-variant: #e8eaf0;
+
+  --color-on-surface: #1a1d2b;
+  --color-on-surface-variant: #5c6070;
+
+  --color-outline: #8a8f9e;
+  --color-outline-variant: #c5c8d2;
+
+  --color-primary: #0094c8;
+  --color-primary-dim: #007aa8;
+
+  --color-secondary: #7c3aed;
+  --color-secondary-dim: #6d28d9;
+
+  --color-error: #dc2626;
+  --color-error-dim: #b91c1c;
+
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-bg-inset: rgba(255, 255, 255, 0.6);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-border-subtle: rgba(0, 0, 0, 0.05);
+  --card-shadow: 0 4px 16px rgba(0,0,0,0.06);
+
+  --input-bg: rgba(0, 0, 0, 0.03);
+  --input-border: rgba(0,0,0,0.12);
+  --input-placeholder: #9ca3af;
+  --input-option-bg: #ffffff;
+
+  --accent-glow: rgba(0,148,200,0.08);
+  --accent-glow-subtle: rgba(0,148,200,0.04);
+  --grid-line: rgba(0, 0, 0, 0.03);
+  --divider: rgba(0,0,0,0.06);
+
+  --toggle-bg: #dde0e8;
+  --toggle-knob: #9ca3af;
+
+  --scrollbar-thumb: #c5c8d2;
+  --scrollbar-thumb-hover: #9ca3af;
+
+  --btn-disabled-bg: #d1d5db;
+
+  --header-bg: rgba(255, 255, 255, 0.85);
+  --header-border: rgba(0,0,0,0.08);
+
+  --week-header-bg: linear-gradient(135deg, rgba(0,148,200,0.04) 0%, rgba(124,58,237,0.04) 100%);
+  --week-header-border: rgba(0,0,0,0.08);
+
+  --modal-overlay: rgba(0,0,0,0.3);
+  --white-alpha-5: rgba(0,0,0,0.04);
+  --white-alpha-2: rgba(0,0,0,0.02);
+}
+
 /* Smooth rendering */
 * {
   -webkit-font-smoothing: antialiased;
@@ -13,11 +150,12 @@
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
-/* ── Stitch background system ── */
+/* ── Background system ── */
 body {
-  background-color: #070d1f;
-  color: #dfe4fe;
+  background-color: var(--color-bg);
+  color: var(--color-on-surface);
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  transition: background-color 0.3s, color 0.3s;
 }
 
 /* Grid background */
@@ -26,8 +164,8 @@ body::before {
   position: fixed;
   inset: 0;
   background-image:
-    linear-gradient(rgba(102, 211, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(102, 211, 255, 0.02) 1px, transparent 1px);
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size: 40px 40px;
   pointer-events: none;
   z-index: 0;
@@ -41,7 +179,7 @@ body::after {
   right: -200px;
   width: 800px;
   height: 800px;
-  background: radial-gradient(circle, rgba(0,201,255,0.15) 0%, transparent 60%);
+  background: radial-gradient(circle, var(--accent-glow) 0%, transparent 60%);
   pointer-events: none;
   z-index: 0;
 }
@@ -53,38 +191,49 @@ body::after {
 
 /* ── Glass card utilities ── */
 .glass-card {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--card-shadow);
 }
 
 .glass-card-inset {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--glass-bg-inset);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border-subtle);
 }
 
-/* Gradient-accented glass card (like the New Entry quick action) */
+/* Gradient-accented glass card */
 .glass-card-accent {
   background: linear-gradient(135deg, rgba(0,201,255,0.10) 0%, rgba(123,47,219,0.10) 100%);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(0,201,255,0.20);
-  box-shadow: 0 4px 24px rgba(0,201,255,0.08);
+  box-shadow: 0 4px 24px var(--accent-glow-subtle);
 }
 
-/* Subtle glow border (no background tint, just the gradient edge) */
+:root.light .glass-card-accent {
+  background: linear-gradient(135deg, rgba(0,148,200,0.06) 0%, rgba(124,58,237,0.06) 100%);
+  border: 1px solid rgba(0,148,200,0.15);
+}
+
+/* Subtle glow border */
 .glass-card-glow {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(0,201,255,0.15);
   box-shadow: 0 2px 16px rgba(0,201,255,0.06);
 }
 
-/* Gradient icon badge (small square icon container) */
+:root.light .glass-card-glow {
+  border: 1px solid rgba(0,148,200,0.15);
+  box-shadow: 0 2px 16px rgba(0,148,200,0.06);
+}
+
+/* Gradient icon badge */
 .icon-badge-gradient {
   background: linear-gradient(135deg, #00C9FF 0%, #7B2FDB 100%);
   border-radius: 12px;
@@ -96,17 +245,17 @@ body::after {
 
 /* Legacy compat */
 .glass {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--glass-border);
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  box-shadow: var(--card-shadow);
 }
 
 .glass-sm {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--glass-bg-inset);
+  border: 1px solid var(--glass-border-subtle);
   border-radius: 10px;
 }
 
@@ -142,9 +291,17 @@ body::after {
   padding: 0.65rem 1.5rem;
 }
 
+:root.light .btn-gradient {
+  box-shadow: 0 2px 12px rgba(0,148,200,0.25);
+}
+
 .btn-gradient:hover {
   box-shadow: 0 0 40px rgba(0,201,255,0.4);
   transform: scale(1.02);
+}
+
+:root.light .btn-gradient:hover {
+  box-shadow: 0 2px 20px rgba(0,148,200,0.35);
 }
 
 .btn-gradient:active {
@@ -152,33 +309,41 @@ body::after {
 }
 
 .btn-gradient:disabled {
-  background: #334155;
+  background: var(--btn-disabled-bg);
   box-shadow: none;
   cursor: not-allowed;
   transform: none;
 }
 
-/* ── Dark input styling ── */
+:root.light .btn-gradient:disabled {
+  color: #6b7280;
+}
+
+/* ── Input styling ── */
 .input-dark {
   padding: 0.65rem 0.85rem;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--input-border);
   border-radius: 10px;
   font-size: 0.875rem;
   font-family: 'Plus Jakarta Sans', sans-serif;
-  color: #dfe4fe;
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-on-surface);
+  background: var(--input-bg);
   transition: border-color 0.2s, box-shadow 0.2s;
   width: 100%;
 }
 
 .input-dark::placeholder {
-  color: #41475b;
+  color: var(--input-placeholder);
 }
 
 .input-dark:focus {
   outline: none;
-  border-color: #66d3ff;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(102,211,255,0.1);
+}
+
+:root.light .input-dark:focus {
+  box-shadow: 0 0 0 3px rgba(0,148,200,0.1);
 }
 
 /* Select arrow override */
@@ -192,8 +357,8 @@ select.input-dark {
 }
 
 select.input-dark option {
-  background: #11192e;
-  color: #dfe4fe;
+  background: var(--input-option-bg);
+  color: var(--color-on-surface);
 }
 
 /* ── Scrollbar ── */
@@ -206,12 +371,12 @@ select.input-dark option {
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #41475b;
+  background-color: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #6f758b;
+  background-color: var(--scrollbar-thumb-hover);
 }
 
 /* ── Toggle switch ── */
@@ -232,7 +397,7 @@ select.input-dark option {
 .toggle-slider {
   position: absolute;
   inset: 0;
-  background: #1c253e;
+  background: var(--toggle-bg);
   border-radius: 24px;
   transition: background 0.25s;
 }
@@ -244,7 +409,7 @@ select.input-dark option {
   height: 18px;
   left: 3px;
   top: 3px;
-  background: #6f758b;
+  background: var(--toggle-knob);
   border-radius: 50%;
   transition: transform 0.25s, background 0.25s;
 }
@@ -253,9 +418,13 @@ select.input-dark option {
   background: rgba(102,211,255,0.25);
 }
 
+:root.light .toggle-switch input:checked + .toggle-slider {
+  background: rgba(0,148,200,0.2);
+}
+
 .toggle-switch input:checked + .toggle-slider::before {
   transform: translateX(18px);
-  background: #66d3ff;
+  background: var(--color-primary);
 }
 
 /* ── Animations ── */

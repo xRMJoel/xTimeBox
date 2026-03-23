@@ -72,7 +72,7 @@ export default function ResetPasswordPage() {
           <div className="icon-badge-gradient w-14 h-14 mx-auto" style={{ borderRadius: '14px' }}>
             <span className="material-symbols-outlined text-white" style={{ fontSize: '28px' }}>check_circle</span>
           </div>
-          <h2 className="font-headline font-black text-2xl text-white">Password updated</h2>
+          <h2 className="font-headline font-black text-2xl text-on-surface">Password updated</h2>
           <p className="text-base text-on-surface-variant">
             Your password has been changed successfully. Redirecting you to sign in...
           </p>
@@ -103,7 +103,7 @@ export default function ResetPasswordPage() {
       <div className="glass-card-accent rounded-2xl w-full max-w-md p-8 space-y-5">
         {error && (
           <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm"
-            style={{ background: 'rgba(255,113,108,0.06)', border: '1px solid rgba(255,113,108,0.2)', color: '#ff716c' }}>
+            style={{ background: 'rgba(255,113,108,0.06)', border: 'var(--color-outline-variant)', color: '#ff716c' }}>
             <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>error</span>
             {error}
           </div>

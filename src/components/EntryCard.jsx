@@ -5,10 +5,10 @@ export default function EntryCard({ entry, onEdit, onDelete, readonly = false })
   const timeBlock = TIME_BLOCKS.find((t) => t.value === entry.time_block)
 
   return (
-    <div className="glass-card-inset rounded-xl p-4 flex items-start justify-between gap-4 hover:border-white/10 transition-colors group/entry">
+    <div className="glass-card-inset rounded-xl p-4 flex items-start justify-between gap-4 hover:border-[var(--glass-border)] transition-colors group/entry">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <span className="font-semibold text-white">{entry.category}</span>
+          <span className="font-semibold text-on-surface">{entry.category}</span>
           <StatusBadge status={entry.status} />
           {entry.feature_tag && (
             <span className="text-xs px-2 py-0.5 rounded border border-primary/20 text-primary bg-primary/5 font-medium">

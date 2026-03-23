@@ -33,9 +33,9 @@ export default function ForgotPasswordPage() {
           <div className="icon-badge-gradient w-14 h-14 mx-auto" style={{ borderRadius: '14px' }}>
             <span className="material-symbols-outlined text-white" style={{ fontSize: '28px' }}>mark_email_read</span>
           </div>
-          <h2 className="font-headline font-black text-2xl text-white">Check your email</h2>
+          <h2 className="font-headline font-black text-2xl text-on-surface">Check your email</h2>
           <p className="text-base text-on-surface-variant">
-            We've sent a password reset link to <strong className="text-white">{email}</strong>.
+            We've sent a password reset link to <strong className="text-on-surface">{email}</strong>.
             Click the link in the email to set a new password.
           </p>
           <p className="text-sm text-outline">
@@ -69,7 +69,7 @@ export default function ForgotPasswordPage() {
       <div className="glass-card-accent rounded-2xl w-full max-w-md p-8 space-y-5">
         {error && (
           <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm"
-            style={{ background: 'rgba(255,113,108,0.06)', border: '1px solid rgba(255,113,108,0.2)', color: '#ff716c' }}>
+            style={{ background: 'rgba(255,113,108,0.06)', border: 'var(--color-outline-variant)', color: '#ff716c' }}>
             <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>error</span>
             {error}
           </div>

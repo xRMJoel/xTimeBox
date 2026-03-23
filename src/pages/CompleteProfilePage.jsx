@@ -67,7 +67,7 @@ export default function CompleteProfilePage() {
       {/* Logo */}
       <div className="mb-8 text-center">
         <Link to="/home"><img src="/logo.png" alt="xTimeBox" className="h-14 mx-auto mb-4" /></Link>
-        <h1 className="font-headline font-black text-2xl text-white mt-4">Complete your profile</h1>
+        <h1 className="font-headline font-black text-2xl text-on-surface mt-4">Complete your profile</h1>
         <p className="text-on-surface-variant text-base mt-2">
           Just a few details before you get started.
         </p>
@@ -77,7 +77,7 @@ export default function CompleteProfilePage() {
       <div className="glass-card-accent rounded-2xl w-full max-w-md p-8 space-y-5">
         {error && (
           <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm"
-            style={{ background: 'rgba(255,113,108,0.06)', border: '1px solid rgba(255,113,108,0.2)', color: '#ff716c' }}>
+            style={{ background: 'rgba(255,113,108,0.06)', border: 'var(--color-outline-variant)', color: '#ff716c' }}>
             <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>error</span>
             {error}
           </div>

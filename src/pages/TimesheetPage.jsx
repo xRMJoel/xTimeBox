@@ -42,7 +42,7 @@ function EntryForm({ entry, onChange, onRemove, index }) {
             value={entry.category}
             onChange={(e) => onChange(index, 'category', e.target.value)}
             className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
-            style={{ background: 'rgba(28, 37, 62, 0.5)', border: 'none' }}
+            style={{ background: 'var(--color-surface-variant)', border: 'none' }}
           >
             <option value="">Select category</option>
             {CATEGORIES.map((c) => (
@@ -57,7 +57,7 @@ function EntryForm({ entry, onChange, onRemove, index }) {
             value={entry.time_block}
             onChange={(e) => onChange(index, 'time_block', e.target.value)}
             className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
-            style={{ background: 'rgba(28, 37, 62, 0.5)', border: 'none' }}
+            style={{ background: 'var(--color-surface-variant)', border: 'none' }}
           >
             <option value="">Select time</option>
             {TIME_BLOCKS.map((t) => (
@@ -74,7 +74,7 @@ function EntryForm({ entry, onChange, onRemove, index }) {
               value={entry.feature_tag}
               onChange={(e) => onChange(index, 'feature_tag', e.target.value)}
               className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
-              style={{ background: 'rgba(28, 37, 62, 0.5)', border: 'none' }}
+              style={{ background: 'var(--color-surface-variant)', border: 'none' }}
               placeholder={category.referencePlaceholder}
             />
           </div>
@@ -88,7 +88,7 @@ function EntryForm({ entry, onChange, onRemove, index }) {
             value={entry.notes}
             onChange={(e) => onChange(index, 'notes', e.target.value)}
             className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none resize-none"
-            style={{ background: 'rgba(28, 37, 62, 0.5)', border: 'none' }}
+            style={{ background: 'var(--color-surface-variant)', border: 'none' }}
             placeholder="Describe your work..."
             rows={2}
           />
@@ -114,7 +114,7 @@ function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, di
         className="w-full p-6 flex items-center justify-between cursor-pointer group"
       >
         <div className="flex items-baseline gap-4">
-          <h3 className="text-xl font-bold font-headline text-white">{day.dayName}</h3>
+          <h3 className="text-xl font-bold font-headline text-on-surface">{day.dayName}</h3>
           <span className="text-sm text-outline">{formatDate(day.date)}</span>
         </div>
         <div className="flex items-center gap-4">
@@ -298,7 +298,7 @@ export default function TimesheetPage() {
           <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center" style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
             <span className="material-symbols-outlined text-green-400" style={{ fontSize: '32px' }}>check_circle</span>
           </div>
-          <h2 className="font-headline font-bold text-2xl text-white">Entries saved</h2>
+          <h2 className="font-headline font-bold text-2xl text-on-surface">Entries saved</h2>
           <p className="text-on-surface-variant">{submitStatus.message}</p>
           <p className="text-sm text-on-surface-variant">
             Your entries are saved as drafts. Review them in{' '}
@@ -325,7 +325,7 @@ export default function TimesheetPage() {
         {/* Page heading */}
         <div>
           <p className="text-[10px] font-bold text-outline mb-2 uppercase tracking-[0.2em]">Time Management</p>
-          <h1 className="text-5xl font-black font-headline text-white tracking-tight">Log Time</h1>
+          <h1 className="text-5xl font-black font-headline text-on-surface tracking-tight">Log Time</h1>
           <p className="text-on-surface-variant mt-3">Record your time entries for the current week across projects and categories.</p>
         </div>
 
@@ -350,8 +350,8 @@ export default function TimesheetPage() {
                 type="date"
                 value={weekEnding}
                 onChange={(e) => setWeekEnding(e.target.value)}
-                className="w-full bg-white/5 border-outline-variant rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-white"
-                style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(65,71,91,0.5)' }}
+                className="w-full bg-white/5 border-outline-variant rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-on-surface"
+                style={{ background: 'var(--glass-bg)', borderColor: 'var(--color-outline-variant)' }}
               />
             </div>
             <div>
@@ -360,8 +360,8 @@ export default function TimesheetPage() {
                 type="text"
                 value={client}
                 onChange={(e) => setClient(e.target.value)}
-                className="w-full bg-white/5 border-outline-variant rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-white placeholder:text-slate-600"
-                style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(65,71,91,0.5)' }}
+                className="w-full bg-white/5 border-outline-variant rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-on-surface placeholder:text-slate-600"
+                style={{ background: 'var(--glass-bg)', borderColor: 'var(--color-outline-variant)' }}
                 placeholder="Select or enter client name"
               />
             </div>
@@ -411,7 +411,7 @@ export default function TimesheetPage() {
 
       {/* Sticky submit bar */}
       <div className="fixed bottom-0 left-0 w-full z-40">
-        <div style={{ background: 'rgba(12, 19, 38, 0.85)', backdropFilter: 'blur(24px)', borderTop: '1px solid rgba(0,201,255,0.15)', boxShadow: '0 -4px 30px rgba(0,201,255,0.06)' }}>
+        <div style={{ background: 'var(--color-surface-container-low)', backdropFilter: 'blur(24px)', borderTop: 'var(--glass-border)', boxShadow: '0 -4px 30px var(--glass-border-subtle)' }}>
           <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] uppercase tracking-widest text-outline font-bold">Current Draft</span>

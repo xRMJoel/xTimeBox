@@ -1,9 +1,11 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useTheme } from '../hooks/useTheme'
 import { useState, useEffect } from 'react'
 
 export default function Layout({ children }) {
   const { profile, isManager, signOut } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const location = useLocation()
   const navigate = useNavigate()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -33,15 +35,15 @@ export default function Layout({ children }) {
     : 'U'
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#070d1f' }}>
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
       {/* Header */}
       <header
         className="sticky top-0 z-50"
         style={{
-          background: 'rgba(7, 13, 31, 0.7)',
+          background: 'var(--header-bg)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          borderBottom: '1px solid rgba(255,255,255,0.05)',
+          borderBottom: '1px solid var(--glass-border-subtle)',
           boxShadow: '0 8px 32px rgba(0,201,255,0.08)',
         }}
       >
@@ -56,8 +58,8 @@ export default function Layout({ children }) {
             <nav
               className="hidden md:flex items-center gap-1 absolute left-1/2 -translate-x-1/2 rounded-full px-1.5 py-1.5"
               style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'var(--glass-bg)',
+                border: '1px solid var(--input-border)',
                 backdropFilter: 'blur(12px)',
               }}
             >
@@ -72,7 +74,7 @@ export default function Layout({ children }) {
                     className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200 ${
                       isActive
                         ? 'text-white'
-                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        : 'text-on-surface-variant hover:text-on-surface hover:bg-[var(--white-alpha-5)]'
                     }`}
                     style={isActive ? {
                       background: 'linear-gradient(135deg, rgba(0,201,255,0.2) 0%, rgba(123,47,219,0.2) 100%)',
@@ -89,7 +91,18 @@ export default function Layout({ children }) {
 
             {/* Right side */}
             <div className="flex items-center gap-3">
-              <button className="p-2 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-all duration-300">
+              {/* Theme toggle */}
+              <button
+                onClick={toggleTheme}
+                className="p-2 rounded-full text-on-surface-variant hover:text-on-surface hover:bg-[var(--white-alpha-5)] transition-all duration-300"
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
+                  {theme === 'dark' ? 'light_mode' : 'dark_mode'}
+                </span>
+              </button>
+
+              <button className="p-2 rounded-full text-on-surface-variant hover:text-on-surface hover:bg-[var(--white-alpha-5)] transition-all duration-300">
                 <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>notifications</span>
               </button>
 
@@ -112,26 +125,26 @@ export default function Layout({ children }) {
                     <div
                       className="absolute right-0 mt-2 w-52 rounded-xl z-30 py-1"
                       style={{
-                        background: 'rgba(17, 25, 46, 0.95)',
+                        background: 'var(--color-surface-container)',
                         backdropFilter: 'blur(20px)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                        border: '1px solid var(--glass-border)',
+                        boxShadow: 'var(--card-shadow)',
                       }}
                     >
-                      <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                        <p className="text-sm font-medium text-white">{profile?.full_name}</p>
+                      <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--divider)' }}>
+                        <p className="text-sm font-medium text-on-surface">{profile?.full_name}</p>
                         <p className="text-xs text-on-surface-variant">{profile?.email}</p>
                       </div>
                       <Link
                         to="/profile"
                         onClick={() => setUserMenuOpen(false)}
-                        className="block w-full text-left px-4 py-2.5 text-sm text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+                        className="block w-full text-left px-4 py-2.5 text-sm text-on-surface-variant hover:text-on-surface hover:bg-[var(--white-alpha-5)] transition-colors"
                       >
                         My Profile
                       </Link>
                       <button
                         onClick={() => { setUserMenuOpen(false); handleSignOut() }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-slate-400 hover:text-red-400 hover:bg-red-400/5 transition-colors rounded-b-xl"
+                        className="w-full text-left px-4 py-2.5 text-sm text-on-surface-variant hover:text-error hover:bg-[var(--white-alpha-5)] transition-colors rounded-b-xl"
                       >
                         Sign out
                       </button>
@@ -143,7 +156,7 @@ export default function Layout({ children }) {
               {/* Mobile hamburger */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+                className="md:hidden p-2 rounded-full text-on-surface-variant hover:text-on-surface hover:bg-[var(--white-alpha-5)] transition-all"
               >
                 <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>
                   {mobileMenuOpen ? 'close' : 'menu'}
@@ -158,9 +171,9 @@ export default function Layout({ children }) {
           <div
             className="md:hidden"
             style={{
-              background: 'rgba(7, 13, 31, 0.95)',
+              background: 'var(--header-bg)',
               backdropFilter: 'blur(20px)',
-              borderTop: '1px solid rgba(0,201,255,0.1)',
+              borderTop: '1px solid var(--divider)',
             }}
           >
             <nav className="max-w-7xl mx-auto px-6 py-4 flex flex-col gap-1">
@@ -173,8 +186,8 @@ export default function Layout({ children }) {
                     to={item.to}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all ${
                       isActive
-                        ? 'text-white'
-                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        ? 'text-on-surface'
+                        : 'text-on-surface-variant hover:text-on-surface hover:bg-[var(--white-alpha-5)]'
                     }`}
                     style={isActive ? {
                       background: 'linear-gradient(135deg, rgba(0,201,255,0.12) 0%, rgba(123,47,219,0.12) 100%)',
@@ -190,7 +203,7 @@ export default function Layout({ children }) {
               })}
 
               {/* Quick actions in mobile nav */}
-              <div className="mt-2 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="mt-2 pt-3" style={{ borderTop: '1px solid var(--divider)' }}>
                 <Link
                   to="/timesheet"
                   className="flex items-center gap-3 px-4 py-3 rounded-xl text-base font-bold text-white transition-all"
@@ -206,17 +219,17 @@ export default function Layout({ children }) {
                 </Link>
               </div>
 
-              <div className="mt-2 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="mt-2 pt-3" style={{ borderTop: '1px solid var(--divider)' }}>
                 <Link
                   to="/profile"
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium text-on-surface-variant hover:text-on-surface hover:bg-[var(--white-alpha-5)] transition-all"
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>person</span>
                   My Profile
                 </Link>
                 <button
                   onClick={handleSignOut}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium text-slate-400 hover:text-red-400 hover:bg-red-400/5 transition-all w-full text-left"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium text-on-surface-variant hover:text-error hover:bg-[var(--white-alpha-5)] transition-all w-full text-left"
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>logout</span>
                   Sign out

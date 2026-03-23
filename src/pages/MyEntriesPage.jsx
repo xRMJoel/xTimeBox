@@ -27,9 +27,9 @@ function EditModal({ entry, onSave, onCancel, saving }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="glass-card rounded-2xl w-full max-w-md p-6 space-y-4">
-        <h3 className="font-headline font-bold text-lg text-white">Edit entry</h3>
+    <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4" style={{ background: 'var(--modal-overlay)' }}>
+      <div className="glass-card rounded-2xl w-full max-w-md p-6 space-y-4" style={{ background: 'var(--color-surface-container)' }}>
+        <h3 className="font-headline font-bold text-lg text-on-surface">Edit entry</h3>
         <p className="text-sm text-on-surface-variant">{entry.day_name}, {formatDate(entry.entry_date)}</p>
 
         <div>
@@ -65,7 +65,7 @@ function EditModal({ entry, onSave, onCancel, saving }) {
         )}
 
         <div className="flex items-center justify-end gap-4 pt-2">
-          <button onClick={onCancel} className="text-sm font-medium text-on-surface-variant hover:text-white transition-colors">
+          <button onClick={onCancel} className="text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors">
             Cancel
           </button>
           <button onClick={handleSave} disabled={saving} className="btn-gradient text-sm disabled:opacity-50">
@@ -145,7 +145,7 @@ export default function MyEntriesPage() {
     <div className="space-y-8">
       <div>
         <p className="text-[10px] font-bold text-outline mb-2 uppercase tracking-[0.2em]">Time Management</p>
-        <h1 className="text-5xl font-black font-headline text-white tracking-tight">My Entries</h1>
+        <h1 className="text-5xl font-black font-headline text-on-surface tracking-tight">My Entries</h1>
         <p className="text-on-surface-variant mt-3">Review and manage your time distribution across projects and tasks.</p>
       </div>
 
@@ -199,9 +199,9 @@ export default function MyEntriesPage() {
         return (
           <div key={weekEnding} className="glass-card rounded-2xl overflow-hidden">
             {/* Week header */}
-            <div className="px-6 py-5 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(0,201,255,0.12)', background: 'linear-gradient(135deg, rgba(0,201,255,0.04) 0%, rgba(123,47,219,0.04) 100%)' }}>
+            <div className="px-6 py-5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--week-header-border)', background: 'var(--week-header-bg)' }}>
               <div>
-                <h2 className="font-headline font-bold text-xl text-white">
+                <h2 className="font-headline font-bold text-xl text-on-surface">
                   Week ending {formatDate(weekEnding)}
                 </h2>
                 <p className="text-on-surface-variant text-sm mt-0.5">
@@ -234,7 +234,7 @@ export default function MyEntriesPage() {
             )}
 
             {hasDrafts && !hasReturned && !allSignedOff && (
-              <div className="px-6 py-3 flex items-center gap-2" style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <div className="px-6 py-3 flex items-center gap-2" style={{ background: 'var(--white-alpha-2)', borderBottom: '1px solid var(--glass-border-subtle)' }}>
                 <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '18px' }}>edit_note</span>
                 <p className="text-sm text-on-surface-variant">
                   These entries are saved as drafts. Submit the week when you're ready for review.
@@ -243,10 +243,10 @@ export default function MyEntriesPage() {
             )}
 
             {/* Day groups */}
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-[var(--glass-border-subtle)]">
               {sortedDays.map((date) => (
                 <div key={date} className="px-6 py-4">
-                  <div className="font-headline font-bold text-white mb-2">
+                  <div className="font-headline font-bold text-on-surface mb-2">
                     {dayGroups[date][0].day_name}, <span className="text-outline">{formatDate(date)}</span>
                   </div>
                   <div className="space-y-2">

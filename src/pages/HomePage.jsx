@@ -178,7 +178,7 @@ export default function HomePage() {
           </div>
 
           <h1 className="font-heading text-4xl sm:text-5xl font-black leading-tight">
-            <span className="text-white">{greeting}, </span>
+            <span className="text-on-surface">{greeting}, </span>
             <span
               style={{
                 background: 'linear-gradient(135deg, #00C9FF 0%, #7B2FDB 100%)',
@@ -272,7 +272,7 @@ export default function HomePage() {
       {/* ── Recent entries ── */}
       <div className="glass-card rounded-2xl p-6 sm:p-8">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="font-heading font-black text-xl text-white">Recent entries</h2>
+          <h2 className="font-heading font-black text-xl text-on-surface">Recent entries</h2>
           <Link
             to="/my-entries"
             className="text-sm text-primary hover:text-primary-dim transition-colors font-medium"
@@ -295,7 +295,7 @@ export default function HomePage() {
               </svg>
             </div>
             <div>
-              <p className="font-heading font-black text-white text-lg mb-1">No entries detected</p>
+              <p className="font-heading font-black text-on-surface text-lg mb-1">No entries detected</p>
               <p className="text-base text-on-surface-variant max-w-xs mx-auto">
                 Start your first session to begin tracking your time.
               </p>
@@ -320,7 +320,7 @@ export default function HomePage() {
             {recentEntries.map((entry) => (
               <div
                 key={entry.id}
-                className="flex items-center gap-4 px-4 py-3 rounded-lg hover:bg-white/[0.03] transition-colors"
+                className="flex items-center gap-4 px-4 py-3 rounded-lg hover:bg-[var(--white-alpha-2)] transition-colors"
               >
                 <div className="w-16 flex-shrink-0">
                   <p className="text-sm text-on-surface-variant font-medium">
@@ -338,7 +338,7 @@ export default function HomePage() {
                   )}
                 </div>
                 <div className="text-right flex-shrink-0 flex items-center gap-4">
-                  <span className="text-base font-semibold text-white">{entry.time_value}d</span>
+                  <span className="text-base font-semibold text-on-surface">{entry.time_value}d</span>
                   {statusBadge(entry.status)}
                 </div>
               </div>
@@ -399,8 +399,8 @@ function QuickAction({ to, icon, title, description, variant = 'ghost' }) {
               boxShadow: '0 4px 24px rgba(0,201,255,0.1)',
             }
           : {
-              background: 'rgba(17, 25, 46, 0.6)',
-              border: '1px solid rgba(255,255,255,0.08)',
+              background: 'var(--glass-bg)',
+              border: '1px solid var(--glass-border)',
               backdropFilter: 'blur(20px)',
             }
       }
@@ -414,7 +414,7 @@ function QuickAction({ to, icon, title, description, variant = 'ghost' }) {
         style={
           isPrimary
             ? { background: 'linear-gradient(135deg, #00C9FF 0%, #7B2FDB 100%)' }
-            : { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }
+            : { background: 'var(--white-alpha-5)', border: '1px solid var(--glass-border)' }
         }
       >
         {icon}
@@ -423,7 +423,7 @@ function QuickAction({ to, icon, title, description, variant = 'ghost' }) {
         <p className={`text-base font-heading font-black transition-colors ${
           isPrimary
             ? 'text-white'
-            : 'text-on-surface group-hover:text-white'
+            : 'text-on-surface'
         }`}>
           {title}
         </p>
