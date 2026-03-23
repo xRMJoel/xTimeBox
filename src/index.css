@@ -89,8 +89,8 @@
   --color-surface-bright: #ffffff;
   --color-surface-variant: #e4e6ec;
 
-  --color-on-surface: #1a1d2b;
-  --color-on-surface-variant: #4b4f5e;
+  --color-on-surface: #1b2559;
+  --color-on-surface-variant: #3d456e;
 
   --color-outline: #747a8c;
   --color-outline-variant: #b0b4c0;
@@ -395,7 +395,7 @@ select.input-dark option {
 }
 
 :root.light .nav-active-item.active {
-  color: #1a1d2b;
+  color: #1b2559;
   background: linear-gradient(135deg, rgba(0,131,179,0.12) 0%, rgba(124,58,237,0.12) 100%) !important;
   border-color: rgba(0,131,179,0.2) !important;
   box-shadow: 0 1px 6px rgba(0,131,179,0.1) !important;

@@ -403,25 +403,17 @@ function QuickAction({ to, icon, title, description, variant = 'ghost' }) {
       }
     >
       <div
-        className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
-          isPrimary
-            ? 'text-white'
-            : 'text-on-surface-variant group-hover:text-white'
-        }`}
-        style={
-          isPrimary
-            ? { background: 'linear-gradient(135deg, #00C9FF 0%, #7B2FDB 100%)' }
-            : { background: 'var(--white-alpha-5)', border: '1px solid var(--glass-border)' }
-        }
+        className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors text-white"
+        style={{
+          background: isPrimary
+            ? 'linear-gradient(135deg, #00C9FF 0%, #7B2FDB 100%)'
+            : 'linear-gradient(135deg, rgba(0,201,255,0.5) 0%, rgba(123,47,219,0.5) 100%)',
+        }}
       >
         {icon}
       </div>
       <div>
-        <p className={`text-base font-heading font-black transition-colors ${
-          isPrimary
-            ? 'text-white'
-            : 'text-on-surface'
-        }`}>
+        <p className="text-base font-heading font-black transition-colors text-on-surface">
           {title}
         </p>
         <p className="text-sm text-on-surface-variant mt-0.5">{description}</p>
