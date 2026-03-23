@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useEntries } from '../hooks/useEntries'
 import EntryCard from '../components/EntryCard'
 import StatusBadge from '../components/StatusBadge'
-import { CATEGORIES, TIME_BLOCKS, formatDate, getMonthLabel, getMonthStart } from '../lib/constants'
+import { CATEGORIES, TIME_BLOCKS, formatDate } from '../lib/constants'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 // Inline edit modal
@@ -78,6 +78,123 @@ function EditModal({ entry, onSave, onCancel, saving }) {
   )
 }
 
+// Determine the overall status of a week based on its entries
+function getWeekStatus(entries) {
+  if (entries.some((e) => e.status === 'returned')) return 'returned'
+  if (entries.every((e) => e.status === 'signed_off')) return 'signed_off'
+  if (entries.every((e) => e.status === 'submitted')) return 'submitted'
+  if (entries.some((e) => e.status === 'submitted')) return 'submitted'
+  return 'draft'
+}
+
+// Collapsible week card
+function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, onSubmit }) {
+  const totalDays = entries.reduce((sum, e) => sum + Number(e.time_value), 0)
+  const weekStatus = getWeekStatus(entries)
+  const hasDrafts = entries.some((e) => e.status === 'draft' || e.status === 'returned')
+  const hasReturned = entries.some((e) => e.status === 'returned')
+  const clients = [...new Set(entries.map((e) => e.client))].join(', ')
+
+  const dayGroups = entries.reduce((groups, entry) => {
+    if (!groups[entry.entry_date]) groups[entry.entry_date] = []
+    groups[entry.entry_date].push(entry)
+    return groups
+  }, {})
+  const sortedDays = Object.keys(dayGroups).sort()
+
+  return (
+    <div className="glass-card rounded-2xl overflow-hidden">
+      {/* Clickable week header */}
+      <button
+        onClick={onToggle}
+        className="w-full px-5 py-4 flex items-center justify-between text-left transition-colors hover:bg-[var(--white-alpha-2)]"
+        style={{ borderBottom: expanded ? '1px solid var(--week-header-border)' : 'none', background: expanded ? 'var(--week-header-bg)' : 'transparent' }}
+      >
+        <div className="flex items-center gap-4 min-w-0">
+          <span
+            className="material-symbols-outlined text-on-surface-variant transition-transform duration-200"
+            style={{ fontSize: '20px', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+          >
+            chevron_right
+          </span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="font-headline font-bold text-base text-on-surface">
+                Week ending {formatDate(weekEnding)}
+              </h2>
+              <StatusBadge status={weekStatus} />
+            </div>
+            <p className="text-on-surface-variant text-sm mt-0.5">
+              {clients} · {totalDays} days · {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          {hasDrafts && (
+            <>
+              <Link
+                to={`/timesheet?week=${weekEnding}`}
+                className="text-sm font-medium text-primary hover:text-primary-dim transition-colors flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>edit</span>
+                Edit week
+              </Link>
+              <button onClick={() => onSubmit(weekEnding)} className="btn-gradient text-sm">
+                {hasReturned ? 'Resubmit week' : 'Submit week'}
+              </button>
+            </>
+          )}
+        </div>
+      </button>
+
+      {/* Expanded content */}
+      {expanded && (
+        <>
+          {hasReturned && (
+            <div className="px-6 py-3 flex items-center gap-2" style={{ background: 'rgba(251,191,36,0.05)', borderBottom: '1px solid rgba(251,191,36,0.15)' }}>
+              <span className="material-symbols-outlined text-amber-400" style={{ fontSize: '18px' }}>undo</span>
+              <p className="text-sm text-amber-400 font-medium">
+                Some entries were returned for editing. Make changes and resubmit the week.
+              </p>
+            </div>
+          )}
+
+          {hasDrafts && !hasReturned && (
+            <div className="px-6 py-3 flex items-center gap-2" style={{ background: 'var(--white-alpha-2)', borderBottom: '1px solid var(--glass-border-subtle)' }}>
+              <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '18px' }}>edit_note</span>
+              <p className="text-sm text-on-surface-variant">
+                These entries are saved as drafts. Submit the week when you're ready for review.
+              </p>
+            </div>
+          )}
+
+          {/* Day groups */}
+          <div className="divide-y divide-[var(--glass-border-subtle)]">
+            {sortedDays.map((date) => (
+              <div key={date} className="px-6 py-4">
+                <div className="font-headline font-bold text-on-surface mb-2">
+                  {dayGroups[date][0].day_name}, <span className="text-outline">{formatDate(date)}</span>
+                </div>
+                <div className="space-y-2">
+                  {dayGroups[date].map((entry) => (
+                    <EntryCard
+                      key={entry.id}
+                      entry={entry}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
+                      readonly={entry.status === 'signed_off'}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function MyEntriesPage() {
   const { user } = useAuth()
   const { fetchUserEntries, updateEntry, deleteEntry, submitWeek, loading } = useEntries()
@@ -86,6 +203,7 @@ export default function MyEntriesPage() {
   const [editingEntry, setEditingEntry] = useState(null)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState(null)
+  const [expandedWeeks, setExpandedWeeks] = useState(new Set())
 
   const loadEntries = useCallback(async () => {
     if (user?.id) {
@@ -106,6 +224,22 @@ export default function MyEntriesPage() {
   }, {})
 
   const sortedWeeks = Object.keys(weekGroups).sort((a, b) => b.localeCompare(a))
+
+  // Separate returned weeks from the rest
+  const returnedWeeks = sortedWeeks.filter((w) => weekGroups[w].some((e) => e.status === 'returned'))
+  const otherWeeks = sortedWeeks.filter((w) => !weekGroups[w].some((e) => e.status === 'returned'))
+
+  function toggleWeek(weekEnding) {
+    setExpandedWeeks((prev) => {
+      const next = new Set(prev)
+      if (next.has(weekEnding)) {
+        next.delete(weekEnding)
+      } else {
+        next.add(weekEnding)
+      }
+      return next
+    })
+  }
 
   async function handleEdit(updates) {
     setSaving(true)
@@ -181,92 +315,60 @@ export default function MyEntriesPage() {
         </div>
       )}
 
-      {sortedWeeks.map((weekEnding) => {
-        const weekEntries = weekGroups[weekEnding]
-        const totalDays = weekEntries.reduce((sum, e) => sum + Number(e.time_value), 0)
-        const hasDrafts = weekEntries.some((e) => e.status === 'draft' || e.status === 'returned')
-        const hasReturned = weekEntries.some((e) => e.status === 'returned')
-        const allSignedOff = weekEntries.every((e) => e.status === 'signed_off')
-        const client = weekEntries[0]?.client
-
-        const dayGroups = weekEntries.reduce((groups, entry) => {
-          if (!groups[entry.entry_date]) groups[entry.entry_date] = []
-          groups[entry.entry_date].push(entry)
-          return groups
-        }, {})
-
-        const sortedDays = Object.keys(dayGroups).sort()
-
-        return (
-          <div key={weekEnding} className="glass-card rounded-2xl overflow-hidden">
-            {/* Week header */}
-            <div className="px-6 py-5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--week-header-border)', background: 'var(--week-header-bg)' }}>
-              <div>
-                <h2 className="font-headline font-bold text-xl text-on-surface">
-                  Week ending {formatDate(weekEnding)}
-                </h2>
-                <p className="text-on-surface-variant text-sm mt-0.5">
-                  {client} · {totalDays} days · {weekEntries.length} entries
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                {allSignedOff && <StatusBadge status="signed_off" />}
-                {hasDrafts && !allSignedOff && (
-                  <>
-                    <Link to={`/timesheet?week=${weekEnding}`} className="text-sm font-medium text-primary hover:text-primary-light transition-colors flex items-center gap-1">
-                      <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add_circle</span>
-                      Add entry
-                    </Link>
-                    <button onClick={() => handleSubmitWeek(weekEnding)} className="btn-gradient text-sm">
-                      {hasReturned ? 'Resubmit week' : 'Submit week'}
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {hasReturned && (
-              <div className="px-6 py-3 flex items-center gap-2" style={{ background: 'rgba(251,191,36,0.05)', borderBottom: '1px solid rgba(251,191,36,0.15)' }}>
-                <span className="material-symbols-outlined text-amber-400" style={{ fontSize: '18px' }}>undo</span>
-                <p className="text-sm text-amber-400 font-medium">
-                  Some entries were returned for editing. Make changes and resubmit the week.
-                </p>
-              </div>
-            )}
-
-            {hasDrafts && !hasReturned && !allSignedOff && (
-              <div className="px-6 py-3 flex items-center gap-2" style={{ background: 'var(--white-alpha-2)', borderBottom: '1px solid var(--glass-border-subtle)' }}>
-                <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '18px' }}>edit_note</span>
-                <p className="text-sm text-on-surface-variant">
-                  These entries are saved as drafts. Submit the week when you're ready for review.
-                </p>
-              </div>
-            )}
-
-            {/* Day groups */}
-            <div className="divide-y divide-[var(--glass-border-subtle)]">
-              {sortedDays.map((date) => (
-                <div key={date} className="px-6 py-4">
-                  <div className="font-headline font-bold text-on-surface mb-2">
-                    {dayGroups[date][0].day_name}, <span className="text-outline">{formatDate(date)}</span>
-                  </div>
-                  <div className="space-y-2">
-                    {dayGroups[date].map((entry) => (
-                      <EntryCard
-                        key={entry.id}
-                        entry={entry}
-                        onEdit={setEditingEntry}
-                        onDelete={handleDelete}
-                        readonly={entry.status === 'signed_off'}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
+      {/* ── Returned submissions banner ── */}
+      {returnedWeeks.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 px-1">
+            <span className="material-symbols-outlined text-amber-400" style={{ fontSize: '22px' }}>undo</span>
+            <div>
+              <h2 className="font-headline font-bold text-base text-on-surface">Returned submissions</h2>
+              <p className="text-sm text-on-surface-variant">
+                {returnedWeeks.length === 1
+                  ? 'One week has been returned for editing. Please review and resubmit.'
+                  : `${returnedWeeks.length} weeks have been returned for editing. Please review and resubmit.`
+                }
+              </p>
             </div>
           </div>
-        )
-      })}
+
+          {returnedWeeks.map((weekEnding) => (
+            <WeekCard
+              key={weekEnding}
+              weekEnding={weekEnding}
+              entries={weekGroups[weekEnding]}
+              expanded={expandedWeeks.has(weekEnding)}
+              onToggle={() => toggleWeek(weekEnding)}
+              onEdit={setEditingEntry}
+              onDelete={handleDelete}
+              onSubmit={handleSubmitWeek}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ── All other weeks ── */}
+      {otherWeeks.length > 0 && (
+        <div className="space-y-4">
+          {returnedWeeks.length > 0 && (
+            <div className="px-1">
+              <h2 className="font-headline font-bold text-base text-on-surface">All weeks</h2>
+            </div>
+          )}
+
+          {otherWeeks.map((weekEnding) => (
+            <WeekCard
+              key={weekEnding}
+              weekEnding={weekEnding}
+              entries={weekGroups[weekEnding]}
+              expanded={expandedWeeks.has(weekEnding)}
+              onToggle={() => toggleWeek(weekEnding)}
+              onEdit={setEditingEntry}
+              onDelete={handleDelete}
+              onSubmit={handleSubmitWeek}
+            />
+          ))}
+        </div>
+      )}
 
       {editingEntry && (
         <EditModal
