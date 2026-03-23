@@ -55,7 +55,9 @@ export default function ResetPasswordPage() {
       const { error: updateErr } = await supabase.auth.updateUser({ password })
       if (updateErr) throw updateErr
       setSuccess(true)
-      setTimeout(() => navigate('/home'), 3000)
+      // Sign out so the user starts fresh with their new password
+      await supabase.auth.signOut()
+      setTimeout(() => navigate('/login'), 3000)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -72,7 +74,7 @@ export default function ResetPasswordPage() {
           </div>
           <h2 className="font-headline font-black text-2xl text-white">Password updated</h2>
           <p className="text-base text-on-surface-variant">
-            Your password has been changed successfully. Redirecting you to the dashboard...
+            Your password has been changed successfully. Redirecting you to sign in...
           </p>
         </div>
       </div>

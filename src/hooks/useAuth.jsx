@@ -25,8 +25,6 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    // Use onAuthStateChange with INITIAL_SESSION event instead of getSession()
-    // This avoids the navigator.locks hang in supabase-js v2
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, s) => {
         setSession(s)
@@ -55,9 +53,29 @@ export function AuthProvider({ children }) {
       }
     }, 5000)
 
+    // Recover session when the tab becomes visible again.
+    // Browsers throttle timers in background tabs, so the auto-refresh
+    // can silently miss its window. This forces a fresh check.
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        supabase.auth.getSession().then(({ data: { session: freshSession } }) => {
+          if (freshSession) {
+            setSession(freshSession)
+          } else {
+            // Session expired while tab was inactive — sign out cleanly
+            setSession(null)
+            setProfile(null)
+          }
+        })
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     return () => {
       subscription.unsubscribe()
       clearTimeout(safetyTimeout)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [])
 
