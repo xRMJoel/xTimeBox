@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useEntries } from '../hooks/useEntries'
 import EntryCard from '../components/EntryCard'
@@ -174,9 +175,9 @@ export default function MyEntriesPage() {
             <span className="material-symbols-outlined text-white" style={{ fontSize: '32px' }}>schedule</span>
           </div>
           <p className="text-on-surface-variant mb-4">No entries yet. Start by logging some time.</p>
-          <a href="/timesheet" className="btn-gradient inline-block text-sm">
+          <Link to="/timesheet" className="btn-gradient inline-block text-sm">
             Log time
-          </a>
+          </Link>
         </div>
       )}
 
@@ -212,10 +213,10 @@ export default function MyEntriesPage() {
                 {allSignedOff && <StatusBadge status="signed_off" />}
                 {hasDrafts && !allSignedOff && (
                   <>
-                    <a href={`/timesheet?week=${weekEnding}`} className="text-sm font-medium text-primary hover:text-primary-light transition-colors flex items-center gap-1">
+                    <Link to={`/timesheet?week=${weekEnding}`} className="text-sm font-medium text-primary hover:text-primary-light transition-colors flex items-center gap-1">
                       <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add_circle</span>
                       Add entry
-                    </a>
+                    </Link>
                     <button onClick={() => handleSubmitWeek(weekEnding)} className="btn-gradient text-sm">
                       {hasReturned ? 'Resubmit week' : 'Submit week'}
                     </button>

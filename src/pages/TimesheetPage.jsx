@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useEntries } from '../hooks/useEntries'
 import {
@@ -302,7 +302,7 @@ export default function TimesheetPage() {
           <p className="text-on-surface-variant">{submitStatus.message}</p>
           <p className="text-sm text-on-surface-variant">
             Your entries are saved as drafts. Review them in{' '}
-            <a href="/my-entries" className="text-primary hover:underline">My Entries</a>,
+            <Link to="/my-entries" className="text-primary hover:underline">My Entries</Link>,
             then submit when ready.
           </p>
           <button
@@ -336,7 +336,7 @@ export default function TimesheetPage() {
             <p className="text-primary-fixed font-medium text-sm">
               You already have <strong>{existingEntries.length}</strong> entries for this week
               totalling <strong>{existingTotal} days</strong>.{' '}
-              <a href="/my-entries" className="underline hover:no-underline">View them</a>.
+              <Link to="/my-entries" className="underline hover:no-underline">View them</Link>.
             </p>
           </div>
         )}
