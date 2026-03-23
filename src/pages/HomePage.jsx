@@ -116,7 +116,7 @@ export default function HomePage() {
       .select('id, entry_date, day_name, client, category, time_value, status, notes')
       .eq('user_id', user.id)
       .order('entry_date', { ascending: false })
-      .limit(8)
+      .limit(5)
 
     return data || []
   }
@@ -138,11 +138,12 @@ export default function HomePage() {
       draft: { bg: 'rgba(250,204,21,0.1)', border: 'rgba(250,204,21,0.25)', text: 'text-yellow-400' },
       submitted: { bg: 'rgba(0,201,255,0.1)', border: 'rgba(0,201,255,0.25)', text: 'text-cyan-400' },
       signed_off: { bg: 'rgba(34,197,94,0.1)', border: 'rgba(34,197,94,0.25)', text: 'text-green-400' },
+      returned: { bg: 'rgba(251,191,36,0.1)', border: 'rgba(251,191,36,0.25)', text: 'text-amber-400' },
     }
     const s = styles[status] || styles.draft
     return (
       <span
-        className={`text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${s.text}`}
+        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${s.text}`}
         style={{ background: s.bg, border: `1px solid ${s.border}` }}
       >
         {status?.replace('_', ' ')}
@@ -269,13 +270,13 @@ export default function HomePage() {
         />
       </div>
 
-      {/* ── Recent entries ── */}
-      <div className="glass-card rounded-2xl p-6 sm:p-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="font-heading font-black text-xl text-on-surface">Recent entries</h2>
+      {/* ── Recent activity ── */}
+      <div className="glass-card rounded-2xl p-5 sm:p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-heading font-bold text-base text-on-surface">Recent activity</h2>
           <Link
             to="/my-entries"
-            className="text-sm text-primary hover:text-primary-dim transition-colors font-medium"
+            className="text-xs text-primary hover:text-primary-dim transition-colors font-medium"
           >
             View all
           </Link>
@@ -284,31 +285,31 @@ export default function HomePage() {
         {initialLoad ? (
           <LoadingSpinner message="Loading activity..." />
         ) : recentEntries.length === 0 ? (
-          <div className="flex flex-col items-center text-center py-10 gap-4">
+          <div className="flex flex-col items-center text-center py-8 gap-3">
             <div
-              className="w-16 h-16 rounded-full flex items-center justify-center"
+              className="w-12 h-12 rounded-full flex items-center justify-center"
               style={{ background: 'rgba(0,201,255,0.08)', border: '1px solid rgba(0,201,255,0.15)' }}
             >
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#66d3ff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#66d3ff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />
                 <polyline points="12 6 12 12 16 14" />
               </svg>
             </div>
             <div>
-              <p className="font-heading font-black text-on-surface text-lg mb-1">No entries detected</p>
-              <p className="text-base text-on-surface-variant max-w-xs mx-auto">
-                Start your first session to begin tracking your time.
+              <p className="font-heading font-bold text-on-surface text-sm mb-0.5">No entries yet</p>
+              <p className="text-sm text-on-surface-variant max-w-xs mx-auto">
+                Start tracking your time to see activity here.
               </p>
             </div>
             <Link
               to="/timesheet"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-base font-semibold text-white transition-all duration-200 hover:scale-[1.03] mt-1"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all duration-200 hover:scale-[1.03]"
               style={{
                 background: 'linear-gradient(135deg, #00C9FF 0%, #7B2FDB 100%)',
                 boxShadow: '0 4px 16px rgba(0,201,255,0.25)',
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
@@ -316,29 +317,25 @@ export default function HomePage() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-1">
+          <div className="divide-y divide-[var(--glass-border-subtle)]">
             {recentEntries.map((entry) => (
               <div
                 key={entry.id}
-                className="flex items-center gap-4 px-4 py-3 rounded-lg hover:bg-[var(--white-alpha-2)] transition-colors"
+                className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
               >
-                <div className="w-16 flex-shrink-0">
-                  <p className="text-sm text-on-surface-variant font-medium">
+                <div className="w-14 flex-shrink-0">
+                  <p className="text-xs text-on-surface-variant font-medium">
                     {new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                   </p>
-                  <p className="text-xs text-outline">{entry.day_name}</p>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-base text-on-surface truncate">
+                  <p className="text-sm text-on-surface truncate">
                     {entry.client}
                     {entry.category ? <span className="text-on-surface-variant"> · {entry.category}</span> : null}
                   </p>
-                  {entry.notes && (
-                    <p className="text-sm text-on-surface-variant/70 truncate mt-0.5">{entry.notes}</p>
-                  )}
                 </div>
-                <div className="text-right flex-shrink-0 flex items-center gap-4">
-                  <span className="text-base font-semibold text-on-surface">{entry.time_value}d</span>
+                <div className="text-right flex-shrink-0 flex items-center gap-3">
+                  <span className="text-sm font-semibold text-on-surface tabular-nums">{entry.time_value}d</span>
                   {statusBadge(entry.status)}
                 </div>
               </div>
