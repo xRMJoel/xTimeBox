@@ -9,17 +9,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
-// Workaround: supabase-js v2 uses navigator.locks internally which can hang
-// in development (Vite HMR, React StrictMode). Disabling it forces the client
-// to use a simple fallback that doesn't require lock acquisition.
-if (typeof navigator !== 'undefined' && navigator.locks) {
-  Object.defineProperty(navigator, 'locks', {
-    value: undefined,
-    configurable: true,
-    writable: true,
-  })
-}
-
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,

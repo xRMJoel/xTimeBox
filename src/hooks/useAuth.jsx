@@ -58,15 +58,7 @@ export function AuthProvider({ children }) {
     // can silently miss its window. This forces a fresh check.
     function handleVisibilityChange() {
       if (document.visibilityState === 'visible') {
-        supabase.auth.getSession().then(({ data: { session: freshSession } }) => {
-          if (freshSession) {
-            setSession(freshSession)
-          } else {
-            // Session expired while tab was inactive — sign out cleanly
-            setSession(null)
-            setProfile(null)
-          }
-        })
+        supabase.auth.startAutoRefresh()
       }
     }
 
