@@ -14,7 +14,7 @@ import {
 import LoadingSpinner from '../components/LoadingSpinner'
 
 // ── Entry form row (inside a day) ──
-function EntryForm({ entry, onChange, onRemove, index, isExisting }) {
+function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects }) {
   const category = CATEGORIES.find((c) => c.value === entry.category)
   const readonly = entry.status === 'signed_off' || entry.status === 'submitted'
 
@@ -57,6 +57,27 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting }) {
           </p>
         </div>
       )}
+
+      {/* Project selector per entry */}
+      <div className="mb-4">
+        <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Project</label>
+        {userProjects.length > 0 ? (
+          <select
+            value={entry.project_id || ''}
+            onChange={(e) => onChange(index, 'project_id', e.target.value)}
+            disabled={readonly}
+            className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
+            style={{ background: 'var(--color-surface-variant)', border: 'none' }}
+          >
+            <option value="">Select project</option>
+            {userProjects.map((p) => (
+              <option key={p.id} value={p.id}>{p.name} ({p.client})</option>
+            ))}
+          </select>
+        ) : (
+          <p className="text-xs text-on-surface-variant italic py-1">No projects assigned. Ask an admin to assign you to a project.</p>
+        )}
+      </div>
 
       <div className={`grid grid-cols-1 ${category?.showReference ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 mb-4`}>
         <div>
@@ -133,7 +154,7 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting }) {
 }
 
 // ── Collapsible day section ──
-function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry }) {
+function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, userProjects }) {
   const [open, setOpen] = useState(true)
   const totalDays = entries.reduce((sum, e) => {
     if (e._id) {
@@ -176,6 +197,7 @@ function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry }) 
               entry={entry}
               index={idx}
               isExisting={!!entry._id}
+              userProjects={userProjects}
               onChange={(i, field, value) => onChangeEntry(day.date, i, field, value)}
               onRemove={(i) => onRemoveEntry(day.date, i)}
             />
@@ -206,7 +228,6 @@ export default function TimesheetPage() {
   const { submitEntries, updateEntry, deleteEntry, fetchWeekEntries, loading, error } = useEntries()
 
   const [weekEnding, setWeekEnding] = useState(searchParams.get('week') || getCurrentWeekFriday())
-  const [selectedProjectId, setSelectedProjectId] = useState('')
   const [userProjects, setUserProjects] = useState([])
   const [includeWeekend, setIncludeWeekend] = useState(false)
   const [entriesByDate, setEntriesByDate] = useState({})
@@ -225,15 +246,8 @@ export default function TimesheetPage() {
           .map((up) => up.projects)
           .filter((p) => p && p.status === 'active')
         setUserProjects(active)
-        // Auto-select first project if none selected
-        if (!selectedProjectId && active.length === 1) {
-          setSelectedProjectId(active[0].id)
-        }
       })
   }, [user?.id])
-
-  const selectedProject = userProjects.find((p) => p.id === selectedProjectId)
-  const client = selectedProject?.client || ''
 
   const weekDates = getWeekDates(weekEnding)
   const visibleDays = includeWeekend ? weekDates : weekDates.filter((d) => !d.isWeekend)
@@ -259,13 +273,10 @@ export default function TimesheetPage() {
             time_value: entry.time_value,
             feature_tag: entry.feature_tag || '',
             notes: entry.notes || '',
+            project_id: entry.project_id || '',
             status: entry.status,
             return_reason: entry.return_reason || null,
           })
-          // Auto-select project from first entry if not set
-          if (!selectedProjectId && entry.project_id) {
-            setSelectedProjectId(entry.project_id)
-          }
         }
         setEntriesByDate(grouped)
       } else {
@@ -276,7 +287,9 @@ export default function TimesheetPage() {
   }, [user?.id, weekEnding, fetchWeekEntries])
 
   function emptyEntry() {
-    return { category: '', time_block: '', feature_tag: '', notes: '' }
+    // Default to user's only project if they have exactly one
+    const defaultProjectId = userProjects.length === 1 ? userProjects[0].id : ''
+    return { category: '', time_block: '', feature_tag: '', notes: '', project_id: defaultProjectId }
   }
 
   function addEntry(date) {
@@ -336,6 +349,7 @@ export default function TimesheetPage() {
     const toValidate = [...newEntries, ...dirtyExisting]
 
     for (const entry of toValidate) {
+      if (!entry.project_id) return `${entry.day.dayName}: Select a project for an entry.`
       if (!entry.category) return `${entry.day.dayName}: Select a category for an entry.`
       if (!entry.time_block) return `${entry.day.dayName}: Select a time block for an entry.`
 
@@ -357,7 +371,8 @@ export default function TimesheetPage() {
       entry.category !== (entry._original.category || '') ||
       entry.time_block !== (entry._original.time_block || '') ||
       entry.feature_tag !== (entry._original.feature_tag || '') ||
-      entry.notes !== (entry._original.notes || '')
+      entry.notes !== (entry._original.notes || '') ||
+      entry.project_id !== (entry._original.project_id || '')
     )
   }
 
@@ -387,6 +402,7 @@ export default function TimesheetPage() {
           } else if (entry._id && isDirty(entry)) {
             // Update this existing entry
             const tb = TIME_BLOCKS.find((t) => t.value === entry.time_block)
+            const proj = userProjects.find((p) => p.id === entry.project_id)
             updates.push({
               id: entry._id,
               changes: {
@@ -395,6 +411,8 @@ export default function TimesheetPage() {
                 time_value: tb?.numericValue || entry.time_value,
                 feature_tag: entry.feature_tag || null,
                 notes: entry.notes || null,
+                project_id: entry.project_id || null,
+                client: proj?.client || entry._original?.client || '',
               },
             })
           }
@@ -409,11 +427,12 @@ export default function TimesheetPage() {
         for (const entry of dayEntries) {
           if (!entry._id && entry.category && entry.time_block) {
             const tb = TIME_BLOCKS.find((t) => t.value === entry.time_block)
+            const entryProject = userProjects.find((p) => p.id === entry.project_id)
             newRows.push({
               user_id: user.id,
               reference: generateReference(day.date, counter++),
-              client: client,
-              project_id: selectedProjectId || null,
+              client: entryProject?.client || '',
+              project_id: entry.project_id || null,
               week_ending: weekEnding,
               day_name: day.dayName,
               entry_date: day.date,
@@ -467,6 +486,7 @@ export default function TimesheetPage() {
           time_value: entry.time_value,
           feature_tag: entry.feature_tag || '',
           notes: entry.notes || '',
+          project_id: entry.project_id || '',
           status: entry.status,
           return_reason: entry.return_reason || null,
         })
@@ -520,8 +540,8 @@ export default function TimesheetPage() {
 
         {/* Section 1: Week details */}
         <section className="glass-card-accent rounded-2xl p-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
-            <div>
+          <div className="mb-6">
+            <div className="max-w-xs">
               <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Week ending (Friday)</label>
               <input
                 type="date"
@@ -530,24 +550,6 @@ export default function TimesheetPage() {
                 className="w-full bg-white/5 border-outline-variant rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-on-surface"
                 style={{ background: 'var(--glass-bg)', borderColor: 'var(--color-outline-variant)' }}
               />
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Project</label>
-              {userProjects.length > 0 ? (
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="w-full bg-white/5 border-outline-variant rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-on-surface"
-                  style={{ background: 'var(--glass-bg)', borderColor: 'var(--color-outline-variant)' }}
-                >
-                  <option value="">Select project</option>
-                  {userProjects.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.client})</option>
-                  ))}
-                </select>
-              ) : (
-                <p className="text-sm text-on-surface-variant py-3">No projects assigned. Ask an admin to assign you to a project.</p>
-              )}
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -580,6 +582,7 @@ export default function TimesheetPage() {
                 key={day.date}
                 day={day}
                 entries={visibleEntries(day.date)}
+                userProjects={userProjects}
                 onAddEntry={addEntry}
                 onChangeEntry={changeEntry}
                 onRemoveEntry={removeEntry}
@@ -617,7 +620,7 @@ export default function TimesheetPage() {
               </Link>
               <button
                 onClick={handleSubmit}
-                disabled={loading || !hasChanges || !selectedProjectId}
+                disabled={loading || !hasChanges}
                 className="signature-gradient-bg px-8 py-3 rounded-xl font-bold text-white shadow-glow hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-40 disabled:transform-none disabled:shadow-none disabled:cursor-not-allowed"
               >
                 {loading ? 'Saving...' : 'Save changes'}
