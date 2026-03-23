@@ -80,23 +80,23 @@
 
 /* ── Light theme overrides ── */
 :root.light {
-  --color-bg: #f5f7fa;
-  --color-surface: #f5f7fa;
+  --color-bg: #eef1f5;
+  --color-surface: #eef1f5;
   --color-surface-container: #ffffff;
-  --color-surface-container-low: #f0f2f5;
-  --color-surface-container-high: #e8eaf0;
-  --color-surface-container-highest: #dde0e8;
+  --color-surface-container-low: #f4f5f7;
+  --color-surface-container-high: #e4e6ec;
+  --color-surface-container-highest: #d8dbe3;
   --color-surface-bright: #ffffff;
-  --color-surface-variant: #e8eaf0;
+  --color-surface-variant: #e4e6ec;
 
   --color-on-surface: #1a1d2b;
-  --color-on-surface-variant: #5c6070;
+  --color-on-surface-variant: #4b4f5e;
 
-  --color-outline: #8a8f9e;
-  --color-outline-variant: #c5c8d2;
+  --color-outline: #747a8c;
+  --color-outline-variant: #b0b4c0;
 
-  --color-primary: #0094c8;
-  --color-primary-dim: #007aa8;
+  --color-primary: #0083b3;
+  --color-primary-dim: #006d96;
 
   --color-secondary: #7c3aed;
   --color-secondary-dim: #6d28d9;
@@ -104,39 +104,39 @@
   --color-error: #dc2626;
   --color-error-dim: #b91c1c;
 
-  --glass-bg: rgba(255, 255, 255, 0.85);
-  --glass-bg-inset: rgba(255, 255, 255, 0.6);
-  --glass-border: rgba(0, 0, 0, 0.08);
-  --glass-border-subtle: rgba(0, 0, 0, 0.05);
-  --card-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  --glass-bg: rgba(255, 255, 255, 0.92);
+  --glass-bg-inset: rgba(0, 0, 0, 0.02);
+  --glass-border: rgba(0, 0, 0, 0.12);
+  --glass-border-subtle: rgba(0, 0, 0, 0.08);
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06);
 
-  --input-bg: rgba(0, 0, 0, 0.03);
-  --input-border: rgba(0,0,0,0.12);
+  --input-bg: #f4f5f7;
+  --input-border: rgba(0,0,0,0.15);
   --input-placeholder: #9ca3af;
   --input-option-bg: #ffffff;
 
-  --accent-glow: rgba(0,148,200,0.08);
-  --accent-glow-subtle: rgba(0,148,200,0.04);
-  --grid-line: rgba(0, 0, 0, 0.03);
-  --divider: rgba(0,0,0,0.06);
+  --accent-glow: rgba(0,131,179,0.06);
+  --accent-glow-subtle: rgba(0,131,179,0.03);
+  --grid-line: rgba(0, 0, 0, 0.025);
+  --divider: rgba(0,0,0,0.08);
 
-  --toggle-bg: #dde0e8;
+  --toggle-bg: #d0d3dc;
   --toggle-knob: #9ca3af;
 
-  --scrollbar-thumb: #c5c8d2;
-  --scrollbar-thumb-hover: #9ca3af;
+  --scrollbar-thumb: #b0b4c0;
+  --scrollbar-thumb-hover: #8a8f9e;
 
   --btn-disabled-bg: #d1d5db;
 
-  --header-bg: rgba(255, 255, 255, 0.85);
-  --header-border: rgba(0,0,0,0.08);
+  --header-bg: rgba(255, 255, 255, 0.92);
+  --header-border: rgba(0,0,0,0.1);
 
-  --week-header-bg: linear-gradient(135deg, rgba(0,148,200,0.04) 0%, rgba(124,58,237,0.04) 100%);
-  --week-header-border: rgba(0,0,0,0.08);
+  --week-header-bg: linear-gradient(135deg, rgba(0,131,179,0.05) 0%, rgba(124,58,237,0.05) 100%);
+  --week-header-border: rgba(0,0,0,0.1);
 
-  --modal-overlay: rgba(0,0,0,0.3);
-  --white-alpha-5: rgba(0,0,0,0.04);
-  --white-alpha-2: rgba(0,0,0,0.02);
+  --modal-overlay: rgba(0,0,0,0.35);
+  --white-alpha-5: rgba(0,0,0,0.05);
+  --white-alpha-2: rgba(0,0,0,0.025);
 }
 
 /* Smooth rendering */
@@ -214,9 +214,19 @@ body::after {
   box-shadow: 0 4px 24px var(--accent-glow-subtle);
 }
 
+:root.light .glass-card {
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+}
+
+:root.light .glass-card-inset {
+  background: #f4f5f7;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
 :root.light .glass-card-accent {
-  background: linear-gradient(135deg, rgba(0,148,200,0.06) 0%, rgba(124,58,237,0.06) 100%);
-  border: 1px solid rgba(0,148,200,0.15);
+  background: linear-gradient(135deg, rgba(0,131,179,0.06) 0%, rgba(124,58,237,0.06) 100%);
+  border: 1px solid rgba(0,131,179,0.18);
+  box-shadow: 0 1px 3px rgba(0,131,179,0.08);
 }
 
 /* Subtle glow border */
