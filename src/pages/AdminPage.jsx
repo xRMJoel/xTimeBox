@@ -19,6 +19,60 @@ function shiftMonth(monthStart, delta) {
   return d.toISOString().slice(0, 10)
 }
 
+// ── Collapsible week section for approval detail view ──
+function CollapsibleWeek({ weekEnding, weekGroups, onReturnWeek, onDeleteWeek, onDeleteEntry }) {
+  const [open, setOpen] = useState(false)
+  const weekEntries = weekGroups[weekEnding]
+  const weekTotal = weekEntries.reduce((sum, e) => sum + Number(e.time_value), 0)
+  const dayGroups = weekEntries.reduce((g, e) => { (g[e.entry_date] ||= []).push(e); return g }, {})
+  const sortedDays = Object.keys(dayGroups).sort()
+
+  return (
+    <div className="glass-card rounded-2xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full px-6 py-4 flex items-center justify-between cursor-pointer group"
+        style={{ borderBottom: open ? '1px solid var(--week-header-border)' : 'none', background: 'var(--week-header-bg)' }}
+      >
+        <div className="flex items-center gap-3">
+          <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors" style={{ fontSize: '20px' }}>
+            {open ? 'expand_more' : 'chevron_right'}
+          </span>
+          <span className="text-base font-medium text-on-surface">Week ending {formatDate(weekEnding)}</span>
+        </div>
+        <div className="flex items-center gap-4">
+          {weekEntries.some((e) => e.status === 'submitted') && (
+            <span onClick={(e) => { e.stopPropagation(); onReturnWeek() }}
+              className="text-sm text-amber-400 hover:text-amber-300 font-medium transition-colors flex items-center gap-1 cursor-pointer">
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>undo</span>
+              Return week
+            </span>
+          )}
+          <span onClick={(e) => { e.stopPropagation(); onDeleteWeek() }}
+            className="text-sm text-error hover:text-error-dim font-medium transition-colors flex items-center gap-1 cursor-pointer">
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>delete</span>
+            Delete week
+          </span>
+          <span className="text-base font-bold text-primary ml-2">{weekTotal} days</span>
+        </div>
+      </button>
+      {open && (
+        <div className="divide-y divide-[var(--glass-border-subtle)]">
+          {sortedDays.map((date) => (
+            <div key={date} className="px-6 py-4">
+              <div className="text-base font-medium text-on-surface mb-2">{dayGroups[date][0].day_name}, {formatDate(date)}</div>
+              <div className="space-y-2">
+                {dayGroups[date].map((entry) => <EntryCard key={entry.id} entry={entry} onDelete={onDeleteEntry} />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ══════════════════════════════════════════════
 // TAB 1: APPROVALS — grouped by project then user
 // ══════════════════════════════════════════════
@@ -183,47 +237,16 @@ function ApprovalsTab() {
           )}
         </div>
 
-        {sortedWeeks.map((weekEnding) => {
-          const weekEntries = weekGroups[weekEnding]
-          const weekTotal = weekEntries.reduce((sum, e) => sum + Number(e.time_value), 0)
-          const dayGroups = weekEntries.reduce((g, e) => { (g[e.entry_date] ||= []).push(e); return g }, {})
-          const sortedDays = Object.keys(dayGroups).sort()
-
-          return (
-            <div key={weekEnding} className="glass-card rounded-2xl overflow-hidden">
-              <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--week-header-border)', background: 'var(--week-header-bg)' }}>
-                <div className="flex items-center justify-between flex-1">
-                  <span className="text-base font-medium text-on-surface">Week ending {formatDate(weekEnding)}</span>
-                  <div className="flex items-center gap-4">
-                    {weekEntries.some((e) => e.status === 'submitted') && (
-                      <button onClick={() => setReturningWeek(weekEnding)}
-                        className="text-sm text-amber-400 hover:text-amber-300 font-medium transition-colors flex items-center gap-1">
-                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>undo</span>
-                        Return week
-                      </button>
-                    )}
-                    <button onClick={() => setDeletingWeek(weekEnding)}
-                      className="text-sm text-error hover:text-error-dim font-medium transition-colors flex items-center gap-1">
-                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>delete</span>
-                      Delete week
-                    </button>
-                  </div>
-                </div>
-                <span className="text-base font-bold text-primary ml-4">{weekTotal} days</span>
-              </div>
-              <div className="divide-y divide-[var(--glass-border-subtle)]">
-                {sortedDays.map((date) => (
-                  <div key={date} className="px-6 py-4">
-                    <div className="text-base font-medium text-on-surface mb-2">{dayGroups[date][0].day_name}, {formatDate(date)}</div>
-                    <div className="space-y-2">
-                      {dayGroups[date].map((entry) => <EntryCard key={entry.id} entry={entry} onDelete={handleDeleteEntry} />)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )
-        })}
+        {sortedWeeks.map((weekEnding) => (
+          <CollapsibleWeek
+            key={weekEnding}
+            weekEnding={weekEnding}
+            weekGroups={weekGroups}
+            onReturnWeek={() => setReturningWeek(weekEnding)}
+            onDeleteWeek={() => setDeletingWeek(weekEnding)}
+            onDeleteEntry={handleDeleteEntry}
+          />
+        ))}
 
         {/* Return modal */}
         {returningWeek && (
