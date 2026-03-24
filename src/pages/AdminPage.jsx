@@ -641,6 +641,7 @@ function ProjectsTab() {
 // ══════════════════════════════════════════════
 
 function UsersTab() {
+  const { user: currentUser } = useAuth()
   const [users, setUsers] = useState([])
   const [projects, setProjects] = useState([])
   const [userProjects, setUserProjects] = useState([]) // all user_projects rows
@@ -650,6 +651,13 @@ function UsersTab() {
   const [inviteResult, setInviteResult] = useState(null)
   const [assigningUser, setAssigningUser] = useState(null)
   const [message, setMessage] = useState(null)
+  const [showDeactivated, setShowDeactivated] = useState(false)
+
+  // Deactivate flow
+  const [deactivatingUser, setDeactivatingUser] = useState(null)
+  const [deactivating, setDeactivating] = useState(false)
+
+  // Hard delete flow (deactivated users only)
   const [deletingUser, setDeletingUser] = useState(null)
   const [deleteUserEntries, setDeleteUserEntries] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -657,7 +665,7 @@ function UsersTab() {
   async function loadData() {
     setLoading(true)
     const [usersRes, projectsRes, upRes] = await Promise.all([
-      supabase.from('profiles').select('id, full_name, email, role').order('full_name'),
+      supabase.from('profiles').select('id, full_name, email, role, deactivated_at').order('full_name'),
       supabase.from('projects').select('*').order('name'),
       supabase.from('user_projects').select('*'),
     ])
@@ -674,9 +682,13 @@ function UsersTab() {
     return projects.filter((p) => projectIds.includes(p.id))
   }
 
-  const filteredUsers = filterProject
-    ? users.filter((u) => userProjects.some((up) => up.user_id === u.id && up.project_id === filterProject))
-    : users
+  // Split users into active and deactivated
+  const activeUsers = users.filter((u) => !u.deactivated_at)
+  const deactivatedUsers = users.filter((u) => u.deactivated_at)
+
+  const filteredActiveUsers = filterProject
+    ? activeUsers.filter((u) => userProjects.some((up) => up.user_id === u.id && up.project_id === filterProject))
+    : activeUsers
 
   async function toggleProjectAssignment(userId, projectId, currentlyAssigned) {
     try {
@@ -693,27 +705,81 @@ function UsersTab() {
     }
   }
 
+  async function handleDeactivateUser() {
+    if (!deactivatingUser) return
+    setDeactivating(true)
+    try {
+      const { error } = await supabase.rpc('admin_deactivate_user', {
+        p_user_id: deactivatingUser.id,
+      })
+      if (error) throw error
+      setMessage({ type: 'success', text: `"${deactivatingUser.full_name || deactivatingUser.email}" has been deactivated.` })
+      setDeactivatingUser(null)
+      await loadData()
+    } catch (err) { setMessage({ type: 'error', text: err.message }) }
+    finally { setDeactivating(false) }
+  }
+
+  async function handleReactivateUser(u) {
+    try {
+      const { error } = await supabase.rpc('admin_reactivate_user', { p_user_id: u.id })
+      if (error) throw error
+      setMessage({ type: 'success', text: `"${u.full_name || u.email}" has been reactivated.` })
+      await loadData()
+    } catch (err) { setMessage({ type: 'error', text: err.message }) }
+  }
+
   async function handleDeleteUser() {
     if (!deletingUser) return
     setDeleting(true)
     try {
-      if (deleteUserEntries) {
-        // Delete all timesheet entries for this user
-        const { error: entriesErr } = await supabase.from('timesheet_entries').delete().eq('user_id', deletingUser.id)
-        if (entriesErr) throw entriesErr
-      }
-      // Remove user_projects assignments
-      const { error: upErr } = await supabase.from('user_projects').delete().eq('user_id', deletingUser.id)
-      if (upErr) throw upErr
-      // Delete the profile (entries remain with user_id for historical reference if not deleted)
-      const { error: profileErr } = await supabase.from('profiles').delete().eq('id', deletingUser.id)
-      if (profileErr) throw profileErr
-      setMessage({ type: 'success', text: `User "${deletingUser.full_name || deletingUser.email}" removed.` })
+      const { error } = await supabase.rpc('admin_delete_user', {
+        p_user_id: deletingUser.id,
+        p_delete_entries: deleteUserEntries,
+      })
+      if (error) throw error
+      setMessage({ type: 'success', text: `"${deletingUser.full_name || deletingUser.email}" has been permanently deleted.` })
       setDeletingUser(null)
       setDeleteUserEntries(false)
       await loadData()
     } catch (err) { setMessage({ type: 'error', text: err.message }) }
     finally { setDeleting(false) }
+  }
+
+  // Shared user row renderer
+  function UserRow({ u, actions }) {
+    const uProjects = getUserProjects(u.id)
+    const isDeactivated = !!u.deactivated_at
+    return (
+      <div className={`px-6 py-4 flex items-center justify-between hover:bg-[var(--white-alpha-2)] transition-colors ${isDeactivated ? 'opacity-60' : ''}`}>
+        <div className="flex items-center gap-3">
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold ${isDeactivated ? 'bg-white/10' : 'signature-gradient-bg'}`}>
+            {u.full_name?.charAt(0)?.toUpperCase() || 'U'}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-on-surface">{u.full_name || 'No name'}</span>
+              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                u.role === 'admin' ? 'text-secondary bg-secondary/10 border border-secondary/20'
+                : u.role === 'resource_manager' ? 'text-primary bg-primary/10 border border-primary/20'
+                : 'text-on-surface-variant bg-white/5 border border-white/10'
+              }`}>{u.role?.replace('_', ' ')}</span>
+            </div>
+            <div className="text-sm text-on-surface-variant">{u.email}</div>
+            {uProjects.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {uProjects.map((p) => (
+                  <span key={p.id} className="text-[10px] font-medium text-primary bg-primary/5 border border-primary/15 rounded px-1.5 py-0.5">{p.name}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {actions}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -761,48 +827,65 @@ function UsersTab() {
 
       {loading && <LoadingSpinner message="Loading users..." />}
 
+      {/* Active users */}
       {!loading && (
         <div className="glass-card rounded-2xl overflow-hidden">
           <div className="divide-y divide-[var(--glass-border-subtle)]">
-            {filteredUsers.map((u) => {
-              const uProjects = getUserProjects(u.id)
-              return (
-                <div key={u.id} className="px-6 py-4 flex items-center justify-between hover:bg-[var(--white-alpha-2)] transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full signature-gradient-bg flex items-center justify-center text-white text-sm font-bold">
-                      {u.full_name?.charAt(0)?.toUpperCase() || 'U'}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-on-surface">{u.full_name || 'No name'}</span>
-                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                          u.role === 'admin' ? 'text-secondary bg-secondary/10 border border-secondary/20'
-                          : u.role === 'resource_manager' ? 'text-primary bg-primary/10 border border-primary/20'
-                          : 'text-on-surface-variant bg-white/5 border border-white/10'
-                        }`}>{u.role?.replace('_', ' ')}</span>
-                      </div>
-                      <div className="text-sm text-on-surface-variant">{u.email}</div>
-                      {uProjects.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-1.5">
-                          {uProjects.map((p) => (
-                            <span key={p.id} className="text-[10px] font-medium text-primary bg-primary/5 border border-primary/15 rounded px-1.5 py-0.5">{p.name}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => setAssigningUser(u)} className="text-sm text-primary hover:text-primary-dim font-medium transition-colors">
-                      Manage projects
+            {filteredActiveUsers.length === 0 && (
+              <p className="text-sm text-on-surface-variant text-center py-8">No active users found.</p>
+            )}
+            {filteredActiveUsers.map((u) => (
+              <UserRow key={u.id} u={u} actions={
+                <>
+                  <button onClick={() => setAssigningUser(u)} className="text-sm text-primary hover:text-primary-dim font-medium transition-colors">
+                    Manage projects
+                  </button>
+                  {u.id !== currentUser?.id && (
+                    <button onClick={() => setDeactivatingUser(u)} className="text-sm text-amber-400 hover:text-amber-300 font-medium transition-colors">
+                      Deactivate
                     </button>
-                    <button onClick={() => { setDeletingUser(u); setDeleteUserEntries(false) }} className="text-sm text-error hover:text-error-dim font-medium transition-colors">
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
+                  )}
+                </>
+              } />
+            ))}
           </div>
+        </div>
+      )}
+
+      {/* Deactivated users section */}
+      {!loading && deactivatedUsers.length > 0 && (
+        <div className="space-y-3">
+          <button
+            onClick={() => setShowDeactivated(!showDeactivated)}
+            className="flex items-center gap-2 text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+              {showDeactivated ? 'expand_less' : 'expand_more'}
+            </span>
+            Deactivated users ({deactivatedUsers.length})
+          </button>
+
+          {showDeactivated && (
+            <div className="glass-card rounded-2xl overflow-hidden border-amber-400/10">
+              <div className="divide-y divide-[var(--glass-border-subtle)]">
+                {deactivatedUsers.map((u) => (
+                  <UserRow key={u.id} u={u} actions={
+                    <>
+                      <span className="text-xs text-on-surface-variant">
+                        Deactivated {new Date(u.deactivated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                      <button onClick={() => handleReactivateUser(u)} className="text-sm text-green-400 hover:text-green-300 font-medium transition-colors">
+                        Reactivate
+                      </button>
+                      <button onClick={() => { setDeletingUser(u); setDeleteUserEntries(false) }} className="text-sm text-error hover:text-error-dim font-medium transition-colors">
+                        Delete
+                      </button>
+                    </>
+                  } />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -849,7 +932,34 @@ function UsersTab() {
         />
       )}
 
-      {/* Delete user confirmation modal */}
+      {/* Deactivate user confirmation modal */}
+      {deactivatingUser && (
+        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4" style={{ background: 'var(--modal-overlay)' }}>
+          <div className="glass-card rounded-2xl w-full max-w-md p-6 space-y-4" style={{ background: 'var(--color-surface-container)' }}>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)' }}>
+                <span className="material-symbols-outlined text-amber-400" style={{ fontSize: '18px' }}>person_off</span>
+              </div>
+              <h3 className="font-headline font-bold text-xl text-on-surface">Deactivate user</h3>
+            </div>
+            <p className="text-sm text-on-surface-variant">
+              <strong className="text-on-surface">{deactivatingUser.full_name || deactivatingUser.email}</strong> will no longer be able to log in. Their timesheet entries and data will be preserved.
+            </p>
+            <p className="text-sm text-on-surface-variant">
+              You can reactivate them at any time, or permanently delete them from the deactivated users list.
+            </p>
+            <div className="flex items-center justify-end gap-4 pt-2">
+              <button onClick={() => setDeactivatingUser(null)} className="text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors">Cancel</button>
+              <button onClick={handleDeactivateUser} disabled={deactivating}
+                className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl px-5 py-2.5 text-sm font-bold transition-colors disabled:opacity-50">
+                {deactivating ? 'Deactivating...' : 'Deactivate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hard delete user confirmation modal (deactivated users only) */}
       {deletingUser && (
         <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4" style={{ background: 'var(--modal-overlay)' }}>
           <div className="glass-card rounded-2xl w-full max-w-md p-6 space-y-4" style={{ background: 'var(--color-surface-container)' }}>
@@ -857,10 +967,10 @@ function UsersTab() {
               <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(255,113,108,0.1)', border: '1px solid rgba(255,113,108,0.2)' }}>
                 <span className="material-symbols-outlined text-error" style={{ fontSize: '18px' }}>person_remove</span>
               </div>
-              <h3 className="font-headline font-bold text-xl text-on-surface">Delete user</h3>
+              <h3 className="font-headline font-bold text-xl text-on-surface">Permanently delete user</h3>
             </div>
             <p className="text-sm text-on-surface-variant">
-              You are about to remove <strong className="text-on-surface">{deletingUser.full_name || deletingUser.email}</strong> from the system. This will unassign them from all projects.
+              You are about to permanently remove <strong className="text-on-surface">{deletingUser.full_name || deletingUser.email}</strong> from the system. This will delete their account, profile, and all project assignments. <strong className="text-error">This cannot be undone.</strong>
             </p>
             <div className="rounded-xl p-4" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
               <p className="text-sm text-on-surface font-medium mb-3">What should happen to their timesheet entries?</p>
@@ -870,7 +980,7 @@ function UsersTab() {
                     className="mt-0.5 accent-[#00C9FF]" />
                   <div>
                     <p className="text-sm font-medium text-on-surface">Keep entries</p>
-                    <p className="text-xs text-on-surface-variant">Their name and timesheet data remain for historical records.</p>
+                    <p className="text-xs text-on-surface-variant">Timesheet data is preserved, but entries will no longer show a user name against them.</p>
                   </div>
                 </label>
                 <label className="flex items-start gap-3 cursor-pointer">
@@ -883,11 +993,17 @@ function UsersTab() {
                 </label>
               </div>
             </div>
+            {!deleteUserEntries && (
+              <div className="rounded-xl p-3 flex items-start gap-2.5" style={{ background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.15)' }}>
+                <span className="material-symbols-outlined text-amber-400 flex-shrink-0" style={{ fontSize: '18px' }}>warning</span>
+                <p className="text-xs text-amber-400/90">Kept entries will appear as "Unknown user" in reports and admin views since the user's profile will no longer exist.</p>
+              </div>
+            )}
             <div className="flex items-center justify-end gap-4 pt-2">
               <button onClick={() => { setDeletingUser(null); setDeleteUserEntries(false) }} className="text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors">Cancel</button>
               <button onClick={handleDeleteUser} disabled={deleting}
                 className="bg-red-600 hover:bg-red-700 text-white rounded-xl px-5 py-2.5 text-sm font-bold transition-colors disabled:opacity-50">
-                {deleting ? 'Deleting...' : 'Delete user'}
+                {deleting ? 'Deleting...' : 'Permanently delete'}
               </button>
             </div>
           </div>

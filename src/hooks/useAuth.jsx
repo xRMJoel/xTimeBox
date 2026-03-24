@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(undefined) // undefined = not yet fetched, null = no profile row
   const [loading, setLoading] = useState(true)
+  const [deactivated, setDeactivated] = useState(false)
   const initialised = useRef(false)
   const profileRef = useRef(undefined) // tracks latest profile for use inside callbacks
 
@@ -34,6 +35,19 @@ export function AuthProvider({ children }) {
         if (s?.user) {
           const result = await fetchProfile(s.user.id)
           if (!result.error) {
+            // Check if the user has been deactivated
+            if (result.data?.deactivated_at) {
+              setSession(null)
+              setProfile(null)
+              profileRef.current = null
+              setDeactivated(true)
+              try { await supabase.auth.signOut() } catch (_) {}
+              if (!initialised.current) {
+                initialised.current = true
+                setLoading(false)
+              }
+              return
+            }
             // Fetch succeeded — update profile (data is null if no row exists)
             setProfile(result.data)
             profileRef.current = result.data
@@ -164,6 +178,7 @@ export function AuthProvider({ children }) {
     user: session?.user ?? null,
     profile,
     loading,
+    deactivated,
     isManager,
     isAdmin,
     profileComplete,
