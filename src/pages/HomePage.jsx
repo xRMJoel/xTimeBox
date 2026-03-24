@@ -11,6 +11,7 @@ export default function HomePage() {
   const [weekEntries, setWeekEntries] = useState([])
   const [initialLoad, setInitialLoad] = useState(true)
   const fetchIdRef = useRef(0)
+  const [modalDay, setModalDay] = useState(null) // lifted from WeekAtAGlance for correct fixed positioning
 
   // Fetch on mount and when user changes
   useEffect(() => {
@@ -115,7 +116,7 @@ export default function HomePage() {
     const weekEnding = getCurrentWeekFriday()
     const { data } = await supabase
       .from('timesheet_entries')
-      .select('id, entry_date, day_name, time_value, status, category, time_block, project_id, projects(name)')
+      .select('id, entry_date, day_name, time_value, status, category, time_block, project_id, feature_tag, notes, projects(name)')
       .eq('user_id', user.id)
       .eq('week_ending', weekEnding)
       .order('entry_date', { ascending: true })
@@ -134,6 +135,14 @@ export default function HomePage() {
   friday.setDate(now.getDate() + diffToFri)
   const weekEndingLabel = friday.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
   const monthName = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+
+  // Computed values for the modal (needs access to weekEntries)
+  const currentWeekEnding = getCurrentWeekFriday()
+  const entriesByDate = {}
+  for (const entry of weekEntries) {
+    if (!entriesByDate[entry.entry_date]) entriesByDate[entry.entry_date] = []
+    entriesByDate[entry.entry_date].push(entry)
+  }
 
   return (
     <div className="relative space-y-10">
@@ -259,9 +268,20 @@ export default function HomePage() {
         weekEntries={weekEntries}
         initialLoad={initialLoad}
         weekEndingLabel={weekEndingLabel}
-        user={user}
-        onRefresh={fetchDashboardData}
+        onOpenDay={setModalDay}
       />
+
+      {/* Quick entry modal — rendered at root level so fixed positioning works */}
+      {modalDay && (
+        <QuickEntryModal
+          day={modalDay}
+          weekEnding={currentWeekEnding}
+          existingEntries={entriesByDate[modalDay.date] || []}
+          user={user}
+          onClose={() => setModalDay(null)}
+          onSaved={() => { setModalDay(null); fetchDashboardData() }}
+        />
+      )}
     </div>
   )
 }
@@ -300,10 +320,9 @@ function StatsCard({ label, value, unit, subtitle, colour }) {
   )
 }
 
-function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, user, onRefresh }) {
+function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, onOpenDay }) {
   const weekEnding = getCurrentWeekFriday()
   const weekDays = getWeekDates(weekEnding).filter((d) => !d.isWeekend) // Mon-Fri only
-  const [modalDay, setModalDay] = useState(null) // { date, dayName } or null
 
   // Group entries by date
   const byDate = {}
@@ -430,7 +449,7 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, user, onRefr
 
                 {/* Open day modal */}
                 <button
-                  onClick={() => setModalDay(day)}
+                  onClick={() => onOpenDay(day)}
                   className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all"
                   title={hasEntries ? `Edit ${day.dayName}` : `Add entry for ${day.dayName}`}
                 >
@@ -455,17 +474,6 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, user, onRefr
         </Link>
       </div>
 
-      {/* Quick entry modal */}
-      {modalDay && (
-        <QuickEntryModal
-          day={modalDay}
-          weekEnding={weekEnding}
-          existingEntries={byDate[modalDay.date] || []}
-          user={user}
-          onClose={() => setModalDay(null)}
-          onSaved={() => { setModalDay(null); onRefresh() }}
-        />
-      )}
     </div>
   )
 }
@@ -477,7 +485,10 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
 
-  // New entry form state
+  // Track which entry is being edited (null = adding new)
+  const [editingId, setEditingId] = useState(null)
+
+  // Form state — used for both new entries and editing existing ones
   const emptyForm = { project_id: '', category: '', time_block: '', feature_tag: '', notes: '' }
   const [form, setForm] = useState(emptyForm)
 
@@ -491,15 +502,36 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
       .then(({ data }) => {
         const active = (data || []).map((up) => up.projects).filter((p) => p && p.status === 'active')
         setUserProjects(active)
-        // Default to only project if there's exactly one
-        if (active.length === 1) {
-          setForm((prev) => ({ ...prev, project_id: active[0].id }))
+        // Default to only project if there's exactly one and we're not editing
+        if (active.length === 1 && !editingId) {
+          setForm((prev) => prev.project_id ? prev : { ...prev, project_id: active[0].id })
         }
       })
   }, [user?.id])
 
   function updateField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
+    setError(null)
+    setSuccess(false)
+  }
+
+  function startEdit(entry) {
+    setEditingId(entry.id)
+    setForm({
+      project_id: entry.project_id || '',
+      category: entry.category || '',
+      time_block: entry.time_block || '',
+      feature_tag: entry.feature_tag || '',
+      notes: entry.notes || '',
+    })
+    setError(null)
+    setSuccess(false)
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    const defaultProject = userProjects.length === 1 ? userProjects[0].id : ''
+    setForm({ ...emptyForm, project_id: defaultProject })
     setError(null)
     setSuccess(false)
   }
@@ -521,26 +553,48 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
     }
 
     try {
-      const entryProject = userProjects.find((p) => p.id === form.project_id)
-      const existingCount = existingEntries.length
-      const row = {
-        user_id: user.id,
-        reference: generateReference(day.date, existingCount + 1),
-        client: entryProject?.client || '',
-        project_id: form.project_id,
-        week_ending: weekEnding,
-        day_name: day.dayName,
-        entry_date: day.date,
-        category: form.category,
-        time_block: form.time_block,
-        time_value: timeBlock.numericValue,
-        feature_tag: form.feature_tag || null,
-        notes: form.notes || null,
-        status: 'draft',
-      }
+      if (editingId) {
+        // Update existing entry
+        const entryProject = userProjects.find((p) => p.id === form.project_id)
+        const updates = {
+          project_id: form.project_id,
+          client: entryProject?.client || '',
+          category: form.category,
+          time_block: form.time_block,
+          time_value: timeBlock.numericValue,
+          feature_tag: form.feature_tag || null,
+          notes: form.notes || null,
+        }
 
-      const { error: insertErr } = await supabase.from('timesheet_entries').insert(row)
-      if (insertErr) throw insertErr
+        const { error: updateErr } = await supabase
+          .from('timesheet_entries')
+          .update(updates)
+          .eq('id', editingId)
+
+        if (updateErr) throw updateErr
+      } else {
+        // Insert new entry
+        const entryProject = userProjects.find((p) => p.id === form.project_id)
+        const existingCount = existingEntries.length
+        const row = {
+          user_id: user.id,
+          reference: generateReference(day.date, existingCount + 1),
+          client: entryProject?.client || '',
+          project_id: form.project_id,
+          week_ending: weekEnding,
+          day_name: day.dayName,
+          entry_date: day.date,
+          category: form.category,
+          time_block: form.time_block,
+          time_value: timeBlock.numericValue,
+          feature_tag: form.feature_tag || null,
+          notes: form.notes || null,
+          status: 'draft',
+        }
+
+        const { error: insertErr } = await supabase.from('timesheet_entries').insert(row)
+        if (insertErr) throw insertErr
+      }
 
       setSuccess(true)
       // Brief delay so user sees the success state, then close and refresh
@@ -559,9 +613,12 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
     return 'text-on-surface-variant bg-white/5 border-white/10'
   }
 
+  // Only draft and returned entries can be edited
+  const isEditable = (status) => status === 'draft' || status === 'returned'
+
   return (
-    <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4" style={{ background: 'var(--modal-overlay)' }}>
-      <div className="glass-card rounded-2xl w-full max-w-lg p-6 space-y-5 max-h-[90vh] overflow-y-auto" style={{ background: 'var(--color-surface-container)' }}>
+    <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4" style={{ background: 'var(--modal-overlay)' }} onClick={onClose}>
+      <div className="glass-card rounded-2xl w-full max-w-lg p-6 space-y-5 max-h-[90vh] overflow-y-auto" style={{ background: 'var(--color-surface-container)' }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -581,7 +638,7 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
             </p>
             <div className="space-y-2">
               {existingEntries.map((entry) => (
-                <div key={entry.id} className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border-subtle)' }}>
+                <div key={entry.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${editingId === entry.id ? 'ring-1 ring-primary/40' : ''}`} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border-subtle)' }}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-on-surface">{entry.projects?.name || 'No project'}</span>
@@ -592,6 +649,21 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
                     <p className="text-xs text-on-surface-variant mt-0.5">{entry.category} - {entry.time_block}</p>
                   </div>
                   <span className="text-sm font-bold text-on-surface tabular-nums">{Number(entry.time_value)}d</span>
+                  {isEditable(entry.status) && (
+                    <button
+                      onClick={() => editingId === entry.id ? cancelEdit() : startEdit(entry)}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                        editingId === entry.id
+                          ? 'text-primary bg-primary/10'
+                          : 'text-on-surface-variant hover:text-primary hover:bg-primary/10'
+                      }`}
+                      title={editingId === entry.id ? 'Cancel editing' : 'Edit entry'}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                        {editingId === entry.id ? 'close' : 'edit'}
+                      </span>
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -601,9 +673,11 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
         {/* Divider */}
         <div style={{ borderTop: '1px solid var(--glass-border-subtle)' }} />
 
-        {/* New entry form */}
+        {/* Entry form — for new or editing existing */}
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-outline mb-3">Add new entry</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-outline mb-3">
+            {editingId ? 'Edit entry' : 'Add new entry'}
+          </p>
 
           <div className="space-y-3">
             {/* Project */}
@@ -698,19 +772,23 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
         {success && (
           <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm" style={{ background: 'rgba(74,222,128,0.06)', color: '#4ade80' }}>
             <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>check_circle</span>
-            Entry saved!
+            {editingId ? 'Entry updated!' : 'Entry saved!'}
           </div>
         )}
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-4 pt-1">
-          <button onClick={onClose} className="text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors">Cancel</button>
+          {editingId ? (
+            <button onClick={cancelEdit} className="text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors">Back to new</button>
+          ) : (
+            <button onClick={onClose} className="text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors">Cancel</button>
+          )}
           <button
             onClick={handleSave}
             disabled={!canSave || saving || success}
             className="signature-gradient-bg text-white rounded-xl px-5 py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:transform-none flex items-center gap-2"
           >
-            {saving ? 'Saving...' : success ? 'Saved!' : 'Save entry'}
+            {saving ? 'Saving...' : success ? 'Saved!' : editingId ? 'Update entry' : 'Save entry'}
           </button>
         </div>
       </div>
