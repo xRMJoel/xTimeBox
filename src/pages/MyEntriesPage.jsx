@@ -95,17 +95,13 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
   const hasReturned = entries.some((e) => e.status === 'returned')
   const projectNames = [...new Set(entries.map((e) => e.projects?.name || e.client).filter(Boolean))].join(', ')
 
-  // Group entries by project, then by day within each project
-  const projectGroups = entries.reduce((groups, entry) => {
-    const projectName = entry.projects?.name || 'No project'
-    const projectKey = entry.project_id || '_none'
-    if (!groups[projectKey]) groups[projectKey] = { name: projectName, client: entry.client, entries: [] }
-    groups[projectKey].entries.push(entry)
+  // Group entries by day, then by project within each day
+  const dayGroups = entries.reduce((groups, entry) => {
+    if (!groups[entry.entry_date]) groups[entry.entry_date] = []
+    groups[entry.entry_date].push(entry)
     return groups
   }, {})
-  const sortedProjectKeys = Object.keys(projectGroups).sort((a, b) =>
-    projectGroups[a].name.localeCompare(projectGroups[b].name)
-  )
+  const sortedDays = Object.keys(dayGroups).sort()
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden">
@@ -173,46 +169,55 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
             </div>
           )}
 
-          {/* Project groups */}
+          {/* Day groups, entries sorted by project within each day */}
           <div className="divide-y divide-[var(--glass-border-subtle)]">
-            {sortedProjectKeys.map((projectKey) => {
-              const project = projectGroups[projectKey]
-              const projectTotal = project.entries.reduce((sum, e) => sum + Number(e.time_value), 0)
-              // Group this project's entries by day
-              const dayGroups = project.entries.reduce((g, e) => { (g[e.entry_date] ||= []).push(e); return g }, {})
-              const sortedDays = Object.keys(dayGroups).sort()
+            {sortedDays.map((date) => {
+              const dayEntries = dayGroups[date]
+              // Group this day's entries by project
+              const projectMap = dayEntries.reduce((g, e) => {
+                const key = e.project_id || '_none'
+                if (!g[key]) g[key] = { name: e.projects?.name || 'No project', client: e.client, entries: [] }
+                g[key].entries.push(e)
+                return g
+              }, {})
+              const sortedProjectKeys = Object.keys(projectMap).sort((a, b) =>
+                projectMap[a].name.localeCompare(projectMap[b].name)
+              )
 
               return (
-                <div key={projectKey} className="px-6 py-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary" style={{ fontSize: '18px' }}>folder</span>
-                      <div>
-                        <span className="font-headline font-bold text-on-surface">{project.name}</span>
-                        {project.client && <span className="text-outline text-sm ml-2">({project.client})</span>}
-                      </div>
-                    </div>
-                    <span className="text-primary font-bold text-sm">{projectTotal} days</span>
+                <div key={date} className="px-6 py-4">
+                  <div className="font-headline font-bold text-on-surface mb-3">
+                    {dayEntries[0].day_name}, <span className="text-outline">{formatDate(date)}</span>
                   </div>
-                  <div className="space-y-3 pl-8">
-                    {sortedDays.map((date) => (
-                      <div key={date}>
-                        <div className="text-xs font-bold uppercase tracking-widest text-outline mb-1.5">
-                          {dayGroups[date][0].day_name}, {formatDate(date)}
+                  <div className="space-y-3">
+                    {sortedProjectKeys.map((projectKey) => {
+                      const project = projectMap[projectKey]
+                      const projectTotal = project.entries.reduce((sum, e) => sum + Number(e.time_value), 0)
+
+                      return (
+                        <div key={projectKey}>
+                          <div className="flex items-center justify-between mb-2 ml-1">
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-primary" style={{ fontSize: '16px' }}>folder</span>
+                              <span className="text-sm font-bold text-on-surface">{project.name}</span>
+                              {project.client && <span className="text-outline text-xs">({project.client})</span>}
+                            </div>
+                            <span className="text-primary font-bold text-xs">{projectTotal}d</span>
+                          </div>
+                          <div className="space-y-2">
+                            {project.entries.map((entry) => (
+                              <EntryCard
+                                key={entry.id}
+                                entry={entry}
+                                onEdit={onEdit}
+                                onDelete={onDelete}
+                                readonly={entry.status === 'signed_off'}
+                              />
+                            ))}
+                          </div>
                         </div>
-                        <div className="space-y-2">
-                          {dayGroups[date].map((entry) => (
-                            <EntryCard
-                              key={entry.id}
-                              entry={entry}
-                              onEdit={onEdit}
-                              onDelete={onDelete}
-                              readonly={entry.status === 'signed_off'}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )
