@@ -3,6 +3,7 @@ import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useEntries } from '../hooks/useEntries'
 import { supabase } from '../lib/supabase'
+import WeekCalendar from '../components/WeekCalendar'
 import {
   CATEGORIES,
   TIME_BLOCKS,
@@ -545,13 +546,7 @@ export default function TimesheetPage() {
           <div className="mb-6">
             <div className="max-w-xs">
               <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Week ending (Friday)</label>
-              <input
-                type="date"
-                value={weekEnding}
-                onChange={(e) => setWeekEnding(e.target.value)}
-                className="w-full bg-white/5 border-outline-variant rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-on-surface"
-                style={{ background: 'var(--glass-bg)', borderColor: 'var(--color-outline-variant)' }}
-              />
+              <WeekCalendar value={weekEnding} onChange={setWeekEnding} userId={user?.id} />
             </div>
           </div>
           <div className="flex items-center gap-4">
