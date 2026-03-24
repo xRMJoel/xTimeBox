@@ -15,9 +15,11 @@ import {
 import LoadingSpinner from '../components/LoadingSpinner'
 
 // ── Entry form row (inside a day) ──
-function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects }) {
+function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects, errors }) {
   const category = CATEGORIES.find((c) => c.value === entry.category)
   const readonly = entry.status === 'signed_off' || entry.status === 'submitted'
+  const errorStyle = { background: 'var(--color-surface-variant)', border: '1.5px solid rgba(255,113,108,0.6)' }
+  const normalStyle = { background: 'var(--color-surface-variant)', border: 'none' }
 
   return (
     <div className={`glass-card-inset rounded-xl p-5 relative group/entry ${readonly ? 'opacity-70' : ''}`}>
@@ -61,14 +63,14 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects 
 
       {/* Project selector per entry */}
       <div className="mb-4">
-        <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Project</label>
+        <label className={`block text-[9px] font-bold uppercase tracking-widest mb-1.5 ${errors?.project_id ? 'text-error' : 'text-outline'}`}>Project {errors?.project_id && '— required'}</label>
         {userProjects.length > 0 ? (
           <select
             value={entry.project_id || ''}
             onChange={(e) => onChange(index, 'project_id', e.target.value)}
             disabled={readonly}
             className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
-            style={{ background: 'var(--color-surface-variant)', border: 'none' }}
+            style={errors?.project_id ? errorStyle : normalStyle}
           >
             <option value="">Select project</option>
             {userProjects.map((p) => (
@@ -82,13 +84,13 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects 
 
       <div className={`grid grid-cols-1 ${category?.showReference ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 mb-4`}>
         <div>
-          <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Category</label>
+          <label className={`block text-[9px] font-bold uppercase tracking-widest mb-1.5 ${errors?.category ? 'text-error' : 'text-outline'}`}>Category {errors?.category && '— required'}</label>
           <select
             value={entry.category}
             onChange={(e) => onChange(index, 'category', e.target.value)}
             disabled={readonly}
             className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
-            style={{ background: 'var(--color-surface-variant)', border: 'none' }}
+            style={errors?.category ? errorStyle : normalStyle}
           >
             <option value="">Select category</option>
             {CATEGORIES.map((c) => (
@@ -98,13 +100,13 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects 
         </div>
 
         <div>
-          <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Time Block</label>
+          <label className={`block text-[9px] font-bold uppercase tracking-widest mb-1.5 ${errors?.time_block ? 'text-error' : 'text-outline'}`}>Time Block {errors?.time_block && '— required'}</label>
           <select
             value={entry.time_block}
             onChange={(e) => onChange(index, 'time_block', e.target.value)}
             disabled={readonly}
             className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
-            style={{ background: 'var(--color-surface-variant)', border: 'none' }}
+            style={errors?.time_block ? errorStyle : normalStyle}
           >
             <option value="">Select time</option>
             {TIME_BLOCKS.map((t) => (
@@ -115,14 +117,14 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects 
 
         {category?.showReference && (
           <div>
-            <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Reference</label>
+            <label className={`block text-[9px] font-bold uppercase tracking-widest mb-1.5 ${errors?.feature_tag ? 'text-error' : 'text-outline'}`}>Reference {errors?.feature_tag && '— required'}</label>
             <input
               type="text"
               value={entry.feature_tag}
               onChange={(e) => onChange(index, 'feature_tag', e.target.value)}
               disabled={readonly}
               className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
-              style={{ background: 'var(--color-surface-variant)', border: 'none' }}
+              style={errors?.feature_tag ? errorStyle : normalStyle}
               placeholder={category.referencePlaceholder}
             />
           </div>
@@ -131,13 +133,13 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects 
 
       {entry.category && (
         <div>
-          <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Notes</label>
+          <label className={`block text-[9px] font-bold uppercase tracking-widest mb-1.5 ${errors?.notes ? 'text-error' : 'text-outline'}`}>Notes {errors?.notes && '— required'}</label>
           <textarea
             value={entry.notes}
             onChange={(e) => onChange(index, 'notes', e.target.value)}
             disabled={readonly}
             className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none resize-none disabled:opacity-60"
-            style={{ background: 'var(--color-surface-variant)', border: 'none' }}
+            style={errors?.notes ? errorStyle : normalStyle}
             placeholder="Describe your work..."
             rows={2}
           />
@@ -155,7 +157,7 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects 
 }
 
 // ── Collapsible day section ──
-function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, userProjects, isNonWorking, onToggleNonWorking }) {
+function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, userProjects, isNonWorking, onToggleNonWorking, validationErrors }) {
   const [open, setOpen] = useState(true)
   const totalDays = entries.reduce((sum, e) => {
     if (e._id) {
@@ -217,17 +219,28 @@ function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, us
               {entries.length === 0 && (
                 <p className="text-sm text-on-surface-variant italic">No entries for this day</p>
               )}
-              {entries.map((entry, idx) => (
-                <EntryForm
-                  key={entry._id || `new-${idx}`}
-                  entry={entry}
-                  index={idx}
-                  isExisting={!!entry._id}
-                  userProjects={userProjects}
-                  onChange={(i, field, value) => onChangeEntry(day.date, i, field, value)}
-                  onRemove={(i) => onRemoveEntry(day.date, i)}
-                />
-              ))}
+              {entries.map((entry, idx) => {
+                // Collect field-level errors for this entry
+                const entryErrors = {}
+                const prefix = `${day.date}:${idx}:`
+                if (validationErrors) {
+                  for (const k of Object.keys(validationErrors)) {
+                    if (k.startsWith(prefix)) entryErrors[k.slice(prefix.length)] = true
+                  }
+                }
+                return (
+                  <EntryForm
+                    key={entry._id || `new-${idx}`}
+                    entry={entry}
+                    index={idx}
+                    isExisting={!!entry._id}
+                    userProjects={userProjects}
+                    onChange={(i, field, value) => onChangeEntry(day.date, i, field, value)}
+                    onRemove={(i) => onRemoveEntry(day.date, i)}
+                    errors={Object.keys(entryErrors).length > 0 ? entryErrors : null}
+                  />
+                )
+              })}
               <div className="flex gap-3">
                 <button
                   type="button"
@@ -280,6 +293,7 @@ export default function TimesheetPage() {
   const [loadingWeek, setLoadingWeek] = useState(false)
   const [nonWorkingDays, setNonWorkingDays] = useState(new Set()) // Set of date strings
   const [nwdChanged, setNwdChanged] = useState(false) // tracks if user toggled a non-working day
+  const [validationErrors, setValidationErrors] = useState({}) // keyed by "date:index:field"
 
   // Load user's assigned projects
   useEffect(() => {
@@ -306,6 +320,7 @@ export default function TimesheetPage() {
     setLoadingWeek(true)
     setSubmitStatus(null)
     setNwdChanged(false)
+    setValidationErrors({})
 
     const dates = getWeekDates(weekEnding)
     const from = dates[0].date
@@ -380,6 +395,11 @@ export default function TimesheetPage() {
   }
 
   function changeEntry(date, index, field, value) {
+    // Clear validation error for this field when user edits it
+    const errorKey = `${date}:${index}:${field}`
+    if (validationErrors[errorKey]) {
+      setValidationErrors((prev) => { const next = { ...prev }; delete next[errorKey]; return next })
+    }
     setEntriesByDate((prev) => {
       const dayEntries = [...(prev[date] || [])]
       const entry = dayEntries[index]
@@ -412,36 +432,33 @@ export default function TimesheetPage() {
   }
 
   function validate() {
-    const allEntries = visibleDays.flatMap((day) => {
-      return (entriesByDate[day.date] || [])
-        .filter((e) => !e._deleted && !e._id) // only validate NEW entries
-        .map((e, i) => ({ ...e, day, index: i }))
-    })
+    const errors = {}
 
-    const newEntries = allEntries.filter((e) => !e._id)
-    // Also validate dirty existing entries
-    const dirtyExisting = visibleDays.flatMap((day) => {
-      return (entriesByDate[day.date] || [])
-        .filter((e) => e._id && !e._deleted && isDirty(e))
-        .map((e, i) => ({ ...e, day, index: i }))
-    })
+    for (const day of visibleDays) {
+      const dayEntries = (entriesByDate[day.date] || []).filter((e) => !e._deleted)
+      dayEntries.forEach((entry, idx) => {
+        // Validate new entries and dirty existing entries
+        const isNew = !entry._id
+        const dirty = entry._id && isDirty(entry)
+        if (!isNew && !dirty) return
 
-    const toValidate = [...newEntries, ...dirtyExisting]
+        const key = (field) => `${day.date}:${idx}:${field}`
+        if (!entry.project_id) errors[key('project_id')] = true
+        if (!entry.category) errors[key('category')] = true
+        if (!entry.time_block) errors[key('time_block')] = true
 
-    for (const entry of toValidate) {
-      if (!entry.project_id) return `${entry.day.dayName}: Select a project for an entry.`
-      if (!entry.category) return `${entry.day.dayName}: Select a category for an entry.`
-      if (!entry.time_block) return `${entry.day.dayName}: Select a time block for an entry.`
-
-      const cat = CATEGORIES.find((c) => c.value === entry.category)
-      if (cat?.showReference && !entry.feature_tag.trim()) {
-        return `${entry.day.dayName}: Reference is required for ${entry.category}.`
-      }
-      if (cat?.requiresNotes && !entry.notes.trim()) {
-        return `${entry.day.dayName}: Notes are required for ${entry.category}.`
-      }
+        const cat = CATEGORIES.find((c) => c.value === entry.category)
+        if (cat?.showReference && !entry.feature_tag.trim()) errors[key('feature_tag')] = true
+        if (cat?.requiresNotes && !entry.notes.trim()) errors[key('notes')] = true
+      })
     }
 
+    setValidationErrors(errors)
+
+    if (Object.keys(errors).length > 0) {
+      const count = new Set(Object.keys(errors).map((k) => k.split(':').slice(0, 2).join(':'))).size
+      return `${count} ${count === 1 ? 'entry has' : 'entries have'} missing fields. Please complete the highlighted fields.`
+    }
     return null
   }
 
@@ -667,6 +684,7 @@ export default function TimesheetPage() {
                 onRemoveEntry={removeEntry}
                 isNonWorking={nonWorkingDays.has(day.date)}
                 onToggleNonWorking={() => toggleNonWorkingDay(day.date)}
+                validationErrors={validationErrors}
               />
             ))}
           </div>
