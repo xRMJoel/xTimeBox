@@ -524,20 +524,32 @@ function MyTimeSummary({ user }) {
 function MySubmissionTracker({ user }) {
   const [range, setRange] = useState(defaultRange)
   const [entries, setEntries] = useState([])
+  const [nwdSet, setNwdSet] = useState(new Set())
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!user?.id) return
     setLoading(true)
     const { from, to } = getDateRange(range)
-    supabase
-      .from('timesheet_entries')
-      .select('id, entry_date, day_name, week_ending, time_value, status')
-      .eq('user_id', user.id)
-      .gte('entry_date', from)
-      .lte('entry_date', to)
-      .order('week_ending', { ascending: true })
-      .then(({ data }) => { setEntries(data || []); setLoading(false) })
+    Promise.all([
+      supabase
+        .from('timesheet_entries')
+        .select('id, entry_date, day_name, week_ending, time_value, status')
+        .eq('user_id', user.id)
+        .gte('entry_date', from)
+        .lte('entry_date', to)
+        .order('week_ending', { ascending: true }),
+      supabase
+        .from('non_working_days')
+        .select('entry_date')
+        .eq('user_id', user.id)
+        .gte('entry_date', from)
+        .lte('entry_date', to),
+    ]).then(([entriesRes, nwdRes]) => {
+      setEntries(entriesRes.data || [])
+      setNwdSet(new Set((nwdRes.data || []).map((r) => r.entry_date)))
+      setLoading(false)
+    })
   }, [user?.id, range])
 
   // Group by week_ending
@@ -552,7 +564,8 @@ function MySubmissionTracker({ user }) {
       .map(([we, ents]) => {
         const weekDays = getWeekDates(we).filter((d) => !d.isWeekend)
         const datesLogged = new Set(ents.map((e) => e.entry_date))
-        const gaps = weekDays.filter((d) => !datesLogged.has(d.date) && d.date <= new Date().toISOString().slice(0, 10))
+        // Non-working days don't count as gaps
+        const gaps = weekDays.filter((d) => !datesLogged.has(d.date) && !nwdSet.has(d.date) && d.date <= new Date().toISOString().slice(0, 10))
         const totalDays = ents.reduce((s, e) => s + Number(e.time_value || 0), 0)
         const statuses = new Set(ents.map((e) => e.status))
         const allSubmitted = ents.length > 0 && ents.every((e) => e.status === 'submitted' || e.status === 'signed_off')
@@ -626,13 +639,16 @@ function MySubmissionTracker({ user }) {
                   const dayEntries = w.entries.filter((e) => e.entry_date === day.date)
                   const dayTotal = dayEntries.reduce((s, e) => s + Number(e.time_value || 0), 0)
                   const has = dayEntries.length > 0
+                  const isNwd = nwdSet.has(day.date)
                   const isPast = day.date <= today
                   const isToday = day.date === today
 
                   let dotBg = 'var(--glass-bg)'
                   let dotBorder = 'var(--glass-border-subtle)'
                   let dotText = 'text-on-surface-variant/40'
-                  if (has) {
+                  if (isNwd) {
+                    dotBg = 'rgba(182,133,255,0.12)'; dotBorder = 'rgba(182,133,255,0.25)'; dotText = 'text-purple-400'
+                  } else if (has) {
                     const allSub = dayEntries.every((e) => e.status === 'submitted' || e.status === 'signed_off')
                     const hasRet = dayEntries.some((e) => e.status === 'returned')
                     if (hasRet) { dotBg = 'rgba(251,191,36,0.15)'; dotBorder = 'rgba(251,191,36,0.3)'; dotText = 'text-amber-400' }
@@ -650,7 +666,7 @@ function MySubmissionTracker({ user }) {
                     >
                       <p className="text-[9px] font-bold uppercase text-on-surface-variant/60">{day.dayName.slice(0, 3)}</p>
                       <p className={`text-sm font-bold tabular-nums ${dotText}`}>
-                        {has ? dayTotal.toFixed(1) : isPast ? '—' : ''}
+                        {isNwd ? 'NW' : has ? dayTotal.toFixed(1) : isPast ? '—' : ''}
                       </p>
                     </div>
                   )

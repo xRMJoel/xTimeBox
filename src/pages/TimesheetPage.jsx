@@ -155,7 +155,7 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects 
 }
 
 // ── Collapsible day section ──
-function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, userProjects }) {
+function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, userProjects, isNonWorking, onToggleNonWorking }) {
   const [open, setOpen] = useState(true)
   const totalDays = entries.reduce((sum, e) => {
     if (e._id) {
@@ -169,18 +169,29 @@ function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, us
   const hasEditableEntries = entries.some((e) => e.status !== 'signed_off' && e.status !== 'submitted')
 
   return (
-    <div className={`glass-card rounded-2xl overflow-hidden ${!open && entries.length === 0 ? 'opacity-80 hover:opacity-100' : ''} transition-opacity`}>
+    <div className={`glass-card rounded-2xl overflow-hidden ${!open && entries.length === 0 ? 'opacity-80 hover:opacity-100' : ''} transition-opacity ${isNonWorking ? 'ring-1 ring-purple-400/30' : ''}`}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
         className="w-full p-6 flex items-center justify-between cursor-pointer group"
       >
-        <div className="flex items-baseline gap-4">
-          <h3 className="text-xl font-bold font-headline text-on-surface">{day.dayName}</h3>
-          <span className="text-sm text-outline">{formatDate(day.date)}</span>
+        <div className="flex items-center gap-4">
+          <div className="flex items-baseline gap-4">
+            <h3 className="text-xl font-bold font-headline text-on-surface">{day.dayName}</h3>
+            <span className="text-sm text-outline">{formatDate(day.date)}</span>
+          </div>
+          {isNonWorking && (
+            <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border text-purple-400 bg-purple-400/10 border-purple-400/20">
+              Non-working
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-primary font-bold">{totalDays.toFixed(2)}d logged</span>
+          {isNonWorking ? (
+            <span className="text-purple-400 font-bold text-sm">Non-working day</span>
+          ) : (
+            <span className="text-primary font-bold">{totalDays.toFixed(2)}d logged</span>
+          )}
           <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors">
             {open ? 'expand_more' : 'chevron_right'}
           </span>
@@ -189,33 +200,65 @@ function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, us
 
       {open && (
         <div className="px-6 pb-6 pt-2 space-y-4">
-          {entries.length === 0 && (
-            <p className="text-sm text-on-surface-variant italic">No entries for this day</p>
+          {isNonWorking ? (
+            <div className="flex items-center justify-between px-4 py-3 rounded-xl" style={{ background: 'rgba(182,133,255,0.06)', border: '1px solid rgba(182,133,255,0.15)' }}>
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-purple-400" style={{ fontSize: '20px' }}>event_busy</span>
+                <span className="text-sm text-on-surface-variant">This day is marked as a non-working day.</span>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onToggleNonWorking() }}
+                className="text-xs font-bold text-purple-400 hover:text-purple-300 transition-colors"
+              >Remove</button>
+            </div>
+          ) : (
+            <>
+              {entries.length === 0 && (
+                <p className="text-sm text-on-surface-variant italic">No entries for this day</p>
+              )}
+              {entries.map((entry, idx) => (
+                <EntryForm
+                  key={entry._id || `new-${idx}`}
+                  entry={entry}
+                  index={idx}
+                  isExisting={!!entry._id}
+                  userProjects={userProjects}
+                  onChange={(i, field, value) => onChangeEntry(day.date, i, field, value)}
+                  onRemove={(i) => onRemoveEntry(day.date, i)}
+                />
+              ))}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => onAddEntry(day.date)}
+                  className="flex-1 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(0,201,255,0.08) 0%, rgba(123,47,219,0.08) 100%)',
+                    border: '2px dashed rgba(0,201,255,0.3)',
+                    color: '#66d3ff',
+                  }}
+                >
+                  <span className="material-symbols-outlined">add_circle</span>
+                  Add entry
+                </button>
+                {entries.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onToggleNonWorking() }}
+                    className="py-4 px-5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.01] text-purple-400"
+                    style={{
+                      background: 'rgba(182,133,255,0.06)',
+                      border: '2px dashed rgba(182,133,255,0.25)',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>event_busy</span>
+                    Non-working
+                  </button>
+                )}
+              </div>
+            </>
           )}
-          {entries.map((entry, idx) => (
-            <EntryForm
-              key={entry._id || `new-${idx}`}
-              entry={entry}
-              index={idx}
-              isExisting={!!entry._id}
-              userProjects={userProjects}
-              onChange={(i, field, value) => onChangeEntry(day.date, i, field, value)}
-              onRemove={(i) => onRemoveEntry(day.date, i)}
-            />
-          ))}
-          <button
-            type="button"
-            onClick={() => onAddEntry(day.date)}
-            className="w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
-            style={{
-              background: 'linear-gradient(135deg, rgba(0,201,255,0.08) 0%, rgba(123,47,219,0.08) 100%)',
-              border: '2px dashed rgba(0,201,255,0.3)',
-              color: '#66d3ff',
-            }}
-          >
-            <span className="material-symbols-outlined">add_circle</span>
-            Add entry
-          </button>
         </div>
       )}
     </div>
@@ -235,6 +278,7 @@ export default function TimesheetPage() {
   const [entriesByDate, setEntriesByDate] = useState({})
   const [submitStatus, setSubmitStatus] = useState(null)
   const [loadingWeek, setLoadingWeek] = useState(false)
+  const [nonWorkingDays, setNonWorkingDays] = useState(new Set()) // Set of date strings
 
   // Load user's assigned projects
   useEffect(() => {
@@ -254,14 +298,26 @@ export default function TimesheetPage() {
   const weekDates = getWeekDates(weekEnding)
   const visibleDays = includeWeekend ? weekDates : weekDates.filter((d) => !d.isWeekend)
 
-  // Load existing entries into the day sections when week changes
+  // Load existing entries and non-working days when week changes
   useEffect(() => {
     if (!user?.id || !weekEnding) return
 
     setLoadingWeek(true)
     setSubmitStatus(null)
 
-    fetchWeekEntries(user.id, weekEnding).then((data) => {
+    const dates = getWeekDates(weekEnding)
+    const from = dates[0].date
+    const to = dates[dates.length - 1].date
+
+    Promise.all([
+      fetchWeekEntries(user.id, weekEnding),
+      supabase
+        .from('non_working_days')
+        .select('entry_date')
+        .eq('user_id', user.id)
+        .gte('entry_date', from)
+        .lte('entry_date', to),
+    ]).then(([data, nwdRes]) => {
       if (data.length > 0) {
         // Group existing entries by date and convert to form format
         const grouped = {}
@@ -284,9 +340,28 @@ export default function TimesheetPage() {
       } else {
         setEntriesByDate({})
       }
+
+      // Set non-working days
+      const nwdSet = new Set((nwdRes.data || []).map((r) => r.entry_date))
+      setNonWorkingDays(nwdSet)
+
       setLoadingWeek(false)
     })
   }, [user?.id, weekEnding, fetchWeekEntries])
+
+  async function toggleNonWorkingDay(date) {
+    if (!user?.id) return
+    const isNwd = nonWorkingDays.has(date)
+    if (isNwd) {
+      // Remove
+      await supabase.from('non_working_days').delete().eq('user_id', user.id).eq('entry_date', date)
+      setNonWorkingDays((prev) => { const next = new Set(prev); next.delete(date); return next })
+    } else {
+      // Add
+      await supabase.from('non_working_days').insert({ user_id: user.id, entry_date: date })
+      setNonWorkingDays((prev) => new Set(prev).add(date))
+    }
+  }
 
   function emptyEntry() {
     // Default to user's only project if they have exactly one
@@ -583,6 +658,8 @@ export default function TimesheetPage() {
                 onAddEntry={addEntry}
                 onChangeEntry={changeEntry}
                 onRemoveEntry={removeEntry}
+                isNonWorking={nonWorkingDays.has(day.date)}
+                onToggleNonWorking={() => toggleNonWorkingDay(day.date)}
               />
             ))}
           </div>
@@ -615,14 +692,14 @@ export default function TimesheetPage() {
               >
                 Back to entries
               </Link>
-              {hasChanges && (
+              {(hasChanges || submittableCount > 0) && (
                 <button
                   onClick={handleSubmit}
-                  disabled={loading}
+                  disabled={loading || !hasChanges}
                   className="px-6 py-3 rounded-xl font-bold text-on-surface border transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40 disabled:transform-none disabled:cursor-not-allowed"
                   style={{ borderColor: 'var(--color-outline-variant)', background: 'var(--glass-bg)' }}
                 >
-                  {loading ? 'Saving...' : 'Save draft'}
+                  {loading ? 'Saving...' : hasChanges ? 'Save draft' : 'Draft saved'}
                 </button>
               )}
               <button

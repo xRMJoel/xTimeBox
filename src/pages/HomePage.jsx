@@ -9,6 +9,7 @@ export default function HomePage() {
   const { user, profile } = useAuth()
   const [stats, setStats] = useState({ weekHours: 0, monthHours: 0, draftCount: 0, submittedCount: 0 })
   const [weekEntries, setWeekEntries] = useState([])
+  const [nonWorkingDays, setNonWorkingDays] = useState(new Set())
   const [initialLoad, setInitialLoad] = useState(true)
   const fetchIdRef = useRef(0)
   const [modalDay, setModalDay] = useState(null) // lifted from WeekAtAGlance for correct fixed positioning
@@ -47,9 +48,10 @@ export default function HomePage() {
     // Only show loading spinner on the very first load, not on background refreshes
     // This prevents the "stuck loading" appearance
     try {
-      const [statsResult, weekResult] = await Promise.allSettled([
+      const [statsResult, weekResult, nwdResult] = await Promise.allSettled([
         fetchStats(),
         fetchWeekEntries(),
+        fetchNonWorkingDays(),
       ])
 
       // Only apply results if this is still the latest fetch
@@ -57,6 +59,7 @@ export default function HomePage() {
 
       if (statsResult.status === 'fulfilled') setStats(statsResult.value)
       if (weekResult.status === 'fulfilled') setWeekEntries(weekResult.value)
+      if (nwdResult.status === 'fulfilled') setNonWorkingDays(nwdResult.value)
     } catch (err) {
       console.error('Dashboard data error:', err)
     } finally {
@@ -122,6 +125,31 @@ export default function HomePage() {
       .order('entry_date', { ascending: true })
 
     return data || []
+  }
+
+  async function fetchNonWorkingDays() {
+    const weekEnding = getCurrentWeekFriday()
+    const dates = getWeekDates(weekEnding)
+    const { data } = await supabase
+      .from('non_working_days')
+      .select('entry_date')
+      .eq('user_id', user.id)
+      .gte('entry_date', dates[0].date)
+      .lte('entry_date', dates[dates.length - 1].date)
+
+    return new Set((data || []).map((r) => r.entry_date))
+  }
+
+  async function toggleNonWorkingDay(date) {
+    if (!user?.id) return
+    const isNwd = nonWorkingDays.has(date)
+    if (isNwd) {
+      await supabase.from('non_working_days').delete().eq('user_id', user.id).eq('entry_date', date)
+      setNonWorkingDays((prev) => { const next = new Set(prev); next.delete(date); return next })
+    } else {
+      await supabase.from('non_working_days').insert({ user_id: user.id, entry_date: date })
+      setNonWorkingDays((prev) => new Set(prev).add(date))
+    }
   }
 
   const firstName = profile?.full_name?.split(' ')[0] || 'there'
@@ -269,6 +297,7 @@ export default function HomePage() {
         initialLoad={initialLoad}
         weekEndingLabel={weekEndingLabel}
         onOpenDay={setModalDay}
+        nonWorkingDays={nonWorkingDays}
       />
 
       {/* Quick entry modal — rendered at root level so fixed positioning works */}
@@ -280,6 +309,8 @@ export default function HomePage() {
           user={user}
           onClose={() => setModalDay(null)}
           onSaved={() => { setModalDay(null); fetchDashboardData() }}
+          isNonWorking={nonWorkingDays.has(modalDay.date)}
+          onToggleNonWorking={() => toggleNonWorkingDay(modalDay.date)}
         />
       )}
     </div>
@@ -320,7 +351,7 @@ function StatsCard({ label, value, unit, subtitle, colour }) {
   )
 }
 
-function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, onOpenDay }) {
+function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, onOpenDay, nonWorkingDays }) {
   const weekEnding = getCurrentWeekFriday()
   const weekDays = getWeekDates(weekEnding).filter((d) => !d.isWeekend) // Mon-Fri only
 
@@ -378,11 +409,14 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, onOpenDay })
             const isToday = day.date === today
             const isPast = day.date < today
             const hasEntries = dayEntries.length > 0
+            const isNwd = nonWorkingDays.has(day.date)
             const dayHasReturned = dayEntries.some((e) => e.status === 'returned')
             const dayAllSubmitted = hasEntries && dayEntries.every((e) => e.status === 'submitted' || e.status === 'signed_off')
 
             // Status dot colour
-            const dotColour = !hasEntries
+            const dotColour = isNwd
+              ? 'bg-purple-400'
+              : !hasEntries
               ? (isPast ? 'bg-red-400/60' : 'bg-white/10')
               : dayHasReturned
               ? 'bg-amber-400'
@@ -405,7 +439,9 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, onOpenDay })
                   isToday ? 'ring-1 ring-primary/30' : ''
                 }`}
                 style={{
-                  background: isToday
+                  background: isNwd
+                    ? 'rgba(182,133,255,0.05)'
+                    : isToday
                     ? 'rgba(0,201,255,0.05)'
                     : hasEntries
                     ? 'var(--glass-bg)'
@@ -414,7 +450,7 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, onOpenDay })
               >
                 {/* Day label */}
                 <div className="w-10 flex-shrink-0">
-                  <p className={`text-sm font-bold ${isToday ? 'text-primary' : 'text-on-surface'}`}>
+                  <p className={`text-sm font-bold ${isNwd ? 'text-purple-400' : isToday ? 'text-primary' : 'text-on-surface'}`}>
                     {day.dayName.slice(0, 3)}
                   </p>
                 </div>
@@ -424,7 +460,9 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, onOpenDay })
 
                 {/* Project breakdown or gap message */}
                 <div className="flex-1 min-w-0">
-                  {hasEntries ? (
+                  {isNwd ? (
+                    <p className="text-sm text-purple-400/70 italic">Non-working day</p>
+                  ) : hasEntries ? (
                     <div className="flex flex-wrap gap-x-4 gap-y-0.5">
                       {projectList.map(([name, total]) => (
                         <span key={name} className="text-sm text-on-surface-variant">
@@ -442,7 +480,7 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, onOpenDay })
 
                 {/* Day total */}
                 <div className="flex-shrink-0 text-right w-12">
-                  {hasEntries && (
+                  {hasEntries && !isNwd && (
                     <span className="text-sm font-bold text-on-surface tabular-nums">{dayTotal}d</span>
                   )}
                 </div>
@@ -479,7 +517,7 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, onOpenDay })
 }
 
 // ── Quick entry modal ──
-function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSaved }) {
+function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSaved, isNonWorking, onToggleNonWorking }) {
   const [userProjects, setUserProjects] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -630,8 +668,25 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
           </button>
         </div>
 
+        {/* Non-working day toggle */}
+        <button
+          onClick={() => { onToggleNonWorking(); if (!isNonWorking) onClose() }}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+            isNonWorking ? 'ring-1 ring-purple-400/30' : 'hover:bg-purple-400/5'
+          }`}
+          style={{
+            background: isNonWorking ? 'rgba(182,133,255,0.08)' : 'var(--glass-bg)',
+            border: `1px solid ${isNonWorking ? 'rgba(182,133,255,0.25)' : 'var(--glass-border-subtle)'}`,
+          }}
+        >
+          <span className={`material-symbols-outlined ${isNonWorking ? 'text-purple-400' : 'text-on-surface-variant'}`} style={{ fontSize: '20px' }}>event_busy</span>
+          <span className={`text-sm font-medium ${isNonWorking ? 'text-purple-400' : 'text-on-surface-variant'}`}>
+            {isNonWorking ? 'Marked as non-working day (click to remove)' : 'Mark as non-working day'}
+          </span>
+        </button>
+
         {/* Existing entries */}
-        {existingEntries.length > 0 && (
+        {!isNonWorking && existingEntries.length > 0 && (
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-outline mb-2">
               Existing entries ({existingEntries.length})
@@ -670,7 +725,8 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
           </div>
         )}
 
-        {/* Divider */}
+        {/* Entry form — hidden when non-working */}
+        {!isNonWorking && <>
         <div style={{ borderTop: '1px solid var(--glass-border-subtle)' }} />
 
         {/* Entry form — for new or editing existing */}
@@ -791,6 +847,7 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
             {saving ? 'Saving...' : success ? 'Saved!' : editingId ? 'Update entry' : 'Save entry'}
           </button>
         </div>
+        </>}
       </div>
     </div>
   )
