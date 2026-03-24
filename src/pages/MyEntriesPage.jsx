@@ -278,10 +278,19 @@ export default function MyEntriesPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <p className="text-[10px] font-bold text-outline mb-2 uppercase tracking-[0.2em]">Time Management</p>
-        <h1 className="text-5xl font-black font-headline text-on-surface tracking-tight">My Entries</h1>
-        <p className="text-on-surface-variant mt-3">Review and manage your time distribution across projects and tasks.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-bold text-outline mb-2 uppercase tracking-[0.2em]">Time Management</p>
+          <h1 className="text-5xl font-black font-headline text-on-surface tracking-tight">My Entries</h1>
+          <p className="text-on-surface-variant mt-3">Review and manage your time distribution across projects and tasks.</p>
+        </div>
+        <Link
+          to="/timesheet"
+          className="flex-shrink-0 mt-6 signature-gradient-bg text-white rounded-xl px-5 py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add</span>
+          New Entry
+        </Link>
       </div>
 
       {message && (
