@@ -541,8 +541,8 @@ export default function TimesheetPage() {
           </div>
         )}
 
-        {/* Section 1: Week details */}
-        <section className="glass-card-accent rounded-2xl p-8">
+        {/* Section 1: Week details — overflow visible so calendar dropdown isn't clipped */}
+        <section className="glass-card-accent rounded-2xl p-8" style={{ overflow: 'visible', position: 'relative', zIndex: 30 }}>
           <div className="mb-6">
             <div className="max-w-xs">
               <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Week ending (Friday)</label>
