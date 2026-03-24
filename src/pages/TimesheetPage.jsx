@@ -279,6 +279,7 @@ export default function TimesheetPage() {
   const [submitStatus, setSubmitStatus] = useState(null)
   const [loadingWeek, setLoadingWeek] = useState(false)
   const [nonWorkingDays, setNonWorkingDays] = useState(new Set()) // Set of date strings
+  const [nwdChanged, setNwdChanged] = useState(false) // tracks if user toggled a non-working day
 
   // Load user's assigned projects
   useEffect(() => {
@@ -304,6 +305,7 @@ export default function TimesheetPage() {
 
     setLoadingWeek(true)
     setSubmitStatus(null)
+    setNwdChanged(false)
 
     const dates = getWeekDates(weekEnding)
     const from = dates[0].date
@@ -361,6 +363,7 @@ export default function TimesheetPage() {
       await supabase.from('non_working_days').insert({ user_id: user.id, entry_date: date })
       setNonWorkingDays((prev) => new Set(prev).add(date))
     }
+    setNwdChanged(true)
   }
 
   function emptyEntry() {
@@ -536,19 +539,23 @@ export default function TimesheetPage() {
         ops.push(submitEntries(newRows))
       }
 
-      if (ops.length === 0) {
+      if (ops.length === 0 && !nwdChanged) {
         setSubmitStatus({ type: 'error', message: 'No changes to save.' })
         return false
       }
 
-      await Promise.all(ops)
+      if (ops.length > 0) {
+        await Promise.all(ops)
+      }
 
       const parts = []
       if (newRows.length > 0) parts.push(`${newRows.length} new ${newRows.length === 1 ? 'entry' : 'entries'} created`)
       if (updates.length > 0) parts.push(`${updates.length} ${updates.length === 1 ? 'entry' : 'entries'} updated`)
       if (deletes.length > 0) parts.push(`${deletes.length} ${deletes.length === 1 ? 'entry' : 'entries'} deleted`)
+      if (nwdChanged && parts.length === 0) parts.push('Non-working days updated')
 
       setSubmitStatus({ type: 'success', message: parts.join(', ') + '.' })
+      setNwdChanged(false)
       navigate('/my-entries')
       return true
     } catch (err) {
@@ -585,7 +592,7 @@ export default function TimesheetPage() {
   const deletedCount = visibleDays.reduce((sum, day) => {
     return sum + (entriesByDate[day.date] || []).filter((e) => e._deleted).length
   }, 0)
-  const hasChanges = newEntryCount > 0 || dirtyCount > 0 || deletedCount > 0
+  const hasChanges = newEntryCount > 0 || dirtyCount > 0 || deletedCount > 0 || nwdChanged
   const submittableCount = allVisible.filter((e) => e._id && (e.status === 'draft' || e.status === 'returned')).length
   const hasSubmittable = submittableCount > 0 || newEntryCount > 0
 
@@ -694,12 +701,12 @@ export default function TimesheetPage() {
               </Link>
               {(hasChanges || submittableCount > 0) && (
                 <button
-                  onClick={handleSubmit}
-                  disabled={loading || !hasChanges}
+                  onClick={hasChanges ? handleSubmit : () => navigate('/my-entries')}
+                  disabled={loading}
                   className="px-6 py-3 rounded-xl font-bold text-on-surface border transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40 disabled:transform-none disabled:cursor-not-allowed"
                   style={{ borderColor: 'var(--color-outline-variant)', background: 'var(--glass-bg)' }}
                 >
-                  {loading ? 'Saving...' : hasChanges ? 'Save draft' : 'Draft saved'}
+                  {loading ? 'Saving...' : 'Save draft'}
                 </button>
               )}
               <button
