@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useEntries } from '../hooks/useEntries'
@@ -154,7 +154,7 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects 
 }
 
 // ── Collapsible day section ──
-function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, userProjects }) {
+function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, userProjects, highlighted }) {
   const [open, setOpen] = useState(true)
   const totalDays = entries.reduce((sum, e) => {
     if (e._id) {
@@ -168,7 +168,10 @@ function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, us
   const hasEditableEntries = entries.some((e) => e.status !== 'signed_off' && e.status !== 'submitted')
 
   return (
-    <div className={`glass-card rounded-2xl overflow-hidden ${!open && entries.length === 0 ? 'opacity-80 hover:opacity-100' : ''} transition-opacity`}>
+    <div
+      id={`day-${day.date}`}
+      className={`glass-card rounded-2xl overflow-hidden ${!open && entries.length === 0 ? 'opacity-80 hover:opacity-100' : ''} transition-opacity ${highlighted ? 'ring-2 ring-primary/40' : ''}`}
+    >
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -228,8 +231,10 @@ export default function TimesheetPage() {
   const { submitEntries, updateEntry, deleteEntry, fetchWeekEntries, submitWeek, loading, error } = useEntries()
 
   const [weekEnding, setWeekEnding] = useState(searchParams.get('week') || getCurrentWeekFriday())
+  const targetDay = searchParams.get('day') // optional: scroll to this day and add entry
   const [userProjects, setUserProjects] = useState([])
   const [includeWeekend, setIncludeWeekend] = useState(false)
+  const dayHandled = useRef(false) // track whether we've already handled the ?day= param
   const [entriesByDate, setEntriesByDate] = useState({})
   const [submitStatus, setSubmitStatus] = useState(null)
   const [loadingWeek, setLoadingWeek] = useState(false)
@@ -285,6 +290,24 @@ export default function TimesheetPage() {
       setLoadingWeek(false)
     })
   }, [user?.id, weekEnding, fetchWeekEntries])
+
+  // Handle ?day= param: scroll to the day and add an empty entry if none exist
+  useEffect(() => {
+    if (!targetDay || loadingWeek || dayHandled.current) return
+    dayHandled.current = true
+
+    // Add an empty entry for the target day if it has no entries
+    const dayEntries = entriesByDate[targetDay] || []
+    if (dayEntries.length === 0) {
+      addEntry(targetDay)
+    }
+
+    // Scroll to the day section after a tick so the DOM has updated
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`day-${targetDay}`)
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }, [targetDay, loadingWeek])
 
   function emptyEntry() {
     // Default to user's only project if they have exactly one
@@ -625,6 +648,7 @@ export default function TimesheetPage() {
                 onAddEntry={addEntry}
                 onChangeEntry={changeEntry}
                 onRemoveEntry={removeEntry}
+                highlighted={day.date === targetDay}
               />
             ))}
           </div>

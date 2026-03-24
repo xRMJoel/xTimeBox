@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { getCurrentWeekFriday, getWeekDates } from '../lib/constants'
@@ -299,6 +299,7 @@ function StatsCard({ label, value, unit, subtitle, colour }) {
 }
 
 function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel }) {
+  const navigate = useNavigate()
   const weekEnding = getCurrentWeekFriday()
   const weekDays = getWeekDates(weekEnding).filter((d) => !d.isWeekend) // Mon-Fri only
 
@@ -368,16 +369,19 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel }) {
               ? 'bg-green-400'
               : 'bg-primary'
 
-            // Unique project names for display
-            const projects = [...new Set(dayEntries.map((e) => e.projects?.name).filter(Boolean))]
+            // Group entries by project for display
+            const projectTotals = {}
+            for (const e of dayEntries) {
+              const name = e.projects?.name || 'Unassigned'
+              projectTotals[name] = (projectTotals[name] || 0) + Number(e.time_value || 0)
+            }
+            const projectList = Object.entries(projectTotals) // [[name, total], ...]
 
             return (
               <div
                 key={day.date}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  isToday
-                    ? 'ring-1 ring-primary/30'
-                    : ''
+                  isToday ? 'ring-1 ring-primary/30' : ''
                 }`}
                 style={{
                   background: isToday
@@ -397,12 +401,17 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel }) {
                 {/* Status dot */}
                 <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dotColour}`} />
 
-                {/* Project names or gap message */}
+                {/* Project breakdown or gap message */}
                 <div className="flex-1 min-w-0">
                   {hasEntries ? (
-                    <p className="text-sm text-on-surface-variant truncate">
-                      {projects.length > 0 ? projects.join(', ') : `${dayEntries.length} ${dayEntries.length === 1 ? 'entry' : 'entries'}`}
-                    </p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                      {projectList.map(([name, total]) => (
+                        <span key={name} className="text-sm text-on-surface-variant">
+                          <span className="text-on-surface font-medium">{name}</span>
+                          <span className="text-on-surface-variant/60 ml-1 tabular-nums">{total}d</span>
+                        </span>
+                      ))}
+                    </div>
                   ) : isPast ? (
                     <p className="text-sm text-red-400/60 italic">No time logged</p>
                   ) : (
@@ -413,9 +422,20 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel }) {
                 {/* Day total */}
                 <div className="flex-shrink-0 text-right w-12">
                   {hasEntries && (
-                    <span className="text-sm font-semibold text-on-surface tabular-nums">{dayTotal}d</span>
+                    <span className="text-sm font-bold text-on-surface tabular-nums">{dayTotal}d</span>
                   )}
                 </div>
+
+                {/* Add / edit day action */}
+                <button
+                  onClick={() => navigate(`/timesheet?week=${weekEnding}&day=${day.date}`)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all"
+                  title={hasEntries ? `Edit ${day.dayName}` : `Add entry for ${day.dayName}`}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                    {hasEntries ? 'edit' : 'add_circle'}
+                  </span>
+                </button>
               </div>
             )
           })}
