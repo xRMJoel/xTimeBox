@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useEntries } from '../hooks/useEntries'
 import { supabase } from '../lib/supabase'
@@ -154,7 +154,7 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects 
 }
 
 // ── Collapsible day section ──
-function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, userProjects, highlighted }) {
+function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, userProjects }) {
   const [open, setOpen] = useState(true)
   const totalDays = entries.reduce((sum, e) => {
     if (e._id) {
@@ -168,10 +168,7 @@ function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, us
   const hasEditableEntries = entries.some((e) => e.status !== 'signed_off' && e.status !== 'submitted')
 
   return (
-    <div
-      id={`day-${day.date}`}
-      className={`glass-card rounded-2xl overflow-hidden ${!open && entries.length === 0 ? 'opacity-80 hover:opacity-100' : ''} transition-opacity ${highlighted ? 'ring-2 ring-primary/40' : ''}`}
-    >
+    <div className={`glass-card rounded-2xl overflow-hidden ${!open && entries.length === 0 ? 'opacity-80 hover:opacity-100' : ''} transition-opacity`}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -228,13 +225,12 @@ function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, us
 export default function TimesheetPage() {
   const [searchParams] = useSearchParams()
   const { user, profile } = useAuth()
+  const navigate = useNavigate()
   const { submitEntries, updateEntry, deleteEntry, fetchWeekEntries, submitWeek, loading, error } = useEntries()
 
   const [weekEnding, setWeekEnding] = useState(searchParams.get('week') || getCurrentWeekFriday())
-  const targetDay = searchParams.get('day') // optional: scroll to this day and add entry
   const [userProjects, setUserProjects] = useState([])
   const [includeWeekend, setIncludeWeekend] = useState(false)
-  const dayHandled = useRef(false) // track whether we've already handled the ?day= param
   const [entriesByDate, setEntriesByDate] = useState({})
   const [submitStatus, setSubmitStatus] = useState(null)
   const [loadingWeek, setLoadingWeek] = useState(false)
@@ -290,24 +286,6 @@ export default function TimesheetPage() {
       setLoadingWeek(false)
     })
   }, [user?.id, weekEnding, fetchWeekEntries])
-
-  // Handle ?day= param: scroll to the day and add an empty entry if none exist
-  useEffect(() => {
-    if (!targetDay || loadingWeek || dayHandled.current) return
-    dayHandled.current = true
-
-    // Add an empty entry for the target day if it has no entries
-    const dayEntries = entriesByDate[targetDay] || []
-    if (dayEntries.length === 0) {
-      addEntry(targetDay)
-    }
-
-    // Scroll to the day section after a tick so the DOM has updated
-    requestAnimationFrame(() => {
-      const el = document.getElementById(`day-${targetDay}`)
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    })
-  }, [targetDay, loadingWeek])
 
   function emptyEntry() {
     // Default to user's only project if they have exactly one
@@ -495,26 +473,7 @@ export default function TimesheetPage() {
       if (deletes.length > 0) parts.push(`${deletes.length} ${deletes.length === 1 ? 'entry' : 'entries'} deleted`)
 
       setSubmitStatus({ type: 'success', message: parts.join(', ') + '.' })
-
-      // Reload entries to get fresh state
-      const data = await fetchWeekEntries(user.id, weekEnding)
-      const grouped = {}
-      for (const entry of data) {
-        if (!grouped[entry.entry_date]) grouped[entry.entry_date] = []
-        grouped[entry.entry_date].push({
-          _id: entry.id,
-          _original: { ...entry },
-          category: entry.category || '',
-          time_block: entry.time_block || '',
-          time_value: entry.time_value,
-          feature_tag: entry.feature_tag || '',
-          notes: entry.notes || '',
-          project_id: entry.project_id || '',
-          status: entry.status,
-          return_reason: entry.return_reason || null,
-        })
-      }
-      setEntriesByDate(grouped)
+      navigate('/my-entries')
       return true
     } catch (err) {
       setSubmitStatus({ type: 'error', message: err.message })
@@ -532,26 +491,7 @@ export default function TimesheetPage() {
     try {
       await submitWeek(user.id, weekEnding)
       setSubmitStatus({ type: 'success', message: 'Week submitted for approval.' })
-
-      // Reload to reflect new statuses
-      const data = await fetchWeekEntries(user.id, weekEnding)
-      const grouped = {}
-      for (const entry of data) {
-        if (!grouped[entry.entry_date]) grouped[entry.entry_date] = []
-        grouped[entry.entry_date].push({
-          _id: entry.id,
-          _original: { ...entry },
-          category: entry.category || '',
-          time_block: entry.time_block || '',
-          time_value: entry.time_value,
-          feature_tag: entry.feature_tag || '',
-          notes: entry.notes || '',
-          project_id: entry.project_id || '',
-          status: entry.status,
-          return_reason: entry.return_reason || null,
-        })
-      }
-      setEntriesByDate(grouped)
+      navigate('/my-entries')
     } catch (err) {
       setSubmitStatus({ type: 'error', message: err.message })
     }
@@ -648,7 +588,6 @@ export default function TimesheetPage() {
                 onAddEntry={addEntry}
                 onChangeEntry={changeEntry}
                 onRemoveEntry={removeEntry}
-                highlighted={day.date === targetDay}
               />
             ))}
           </div>

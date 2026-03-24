@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
-import { getCurrentWeekFriday, getWeekDates } from '../lib/constants'
+import { getCurrentWeekFriday, getWeekDates, CATEGORIES, TIME_BLOCKS, generateReference, formatDate } from '../lib/constants'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function HomePage() {
@@ -115,7 +115,7 @@ export default function HomePage() {
     const weekEnding = getCurrentWeekFriday()
     const { data } = await supabase
       .from('timesheet_entries')
-      .select('id, entry_date, day_name, time_value, status, project_id, projects(name)')
+      .select('id, entry_date, day_name, time_value, status, category, time_block, project_id, projects(name)')
       .eq('user_id', user.id)
       .eq('week_ending', weekEnding)
       .order('entry_date', { ascending: true })
@@ -259,6 +259,8 @@ export default function HomePage() {
         weekEntries={weekEntries}
         initialLoad={initialLoad}
         weekEndingLabel={weekEndingLabel}
+        user={user}
+        onRefresh={fetchDashboardData}
       />
     </div>
   )
@@ -298,10 +300,10 @@ function StatsCard({ label, value, unit, subtitle, colour }) {
   )
 }
 
-function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel }) {
-  const navigate = useNavigate()
+function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, user, onRefresh }) {
   const weekEnding = getCurrentWeekFriday()
   const weekDays = getWeekDates(weekEnding).filter((d) => !d.isWeekend) // Mon-Fri only
+  const [modalDay, setModalDay] = useState(null) // { date, dayName } or null
 
   // Group entries by date
   const byDate = {}
@@ -426,9 +428,9 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel }) {
                   )}
                 </div>
 
-                {/* Add / edit day action */}
+                {/* Open day modal */}
                 <button
-                  onClick={() => navigate(`/timesheet?week=${weekEnding}&day=${day.date}`)}
+                  onClick={() => setModalDay(day)}
                   className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all"
                   title={hasEntries ? `Edit ${day.dayName}` : `Add entry for ${day.dayName}`}
                 >
@@ -451,6 +453,266 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel }) {
           <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>edit_calendar</span>
           Edit this week
         </Link>
+      </div>
+
+      {/* Quick entry modal */}
+      {modalDay && (
+        <QuickEntryModal
+          day={modalDay}
+          weekEnding={weekEnding}
+          existingEntries={byDate[modalDay.date] || []}
+          user={user}
+          onClose={() => setModalDay(null)}
+          onSaved={() => { setModalDay(null); onRefresh() }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Quick entry modal ──
+function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSaved }) {
+  const [userProjects, setUserProjects] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(false)
+
+  // New entry form state
+  const emptyForm = { project_id: '', category: '', time_block: '', feature_tag: '', notes: '' }
+  const [form, setForm] = useState(emptyForm)
+
+  // Load user's assigned projects
+  useEffect(() => {
+    if (!user?.id) return
+    supabase
+      .from('user_projects')
+      .select('project_id, projects(id, name, client, status)')
+      .eq('user_id', user.id)
+      .then(({ data }) => {
+        const active = (data || []).map((up) => up.projects).filter((p) => p && p.status === 'active')
+        setUserProjects(active)
+        // Default to only project if there's exactly one
+        if (active.length === 1) {
+          setForm((prev) => ({ ...prev, project_id: active[0].id }))
+        }
+      })
+  }, [user?.id])
+
+  function updateField(field, value) {
+    setForm((prev) => ({ ...prev, [field]: value }))
+    setError(null)
+    setSuccess(false)
+  }
+
+  const category = CATEGORIES.find((c) => c.value === form.category)
+  const timeBlock = TIME_BLOCKS.find((t) => t.value === form.time_block)
+  const canSave = form.project_id && form.category && form.time_block
+
+  async function handleSave() {
+    if (!canSave) return
+    setSaving(true)
+    setError(null)
+
+    // Validation
+    if (category?.showReference && !form.feature_tag.trim()) {
+      setError(`Reference is required for ${form.category}.`)
+      setSaving(false)
+      return
+    }
+
+    try {
+      const entryProject = userProjects.find((p) => p.id === form.project_id)
+      const existingCount = existingEntries.length
+      const row = {
+        user_id: user.id,
+        reference: generateReference(day.date, existingCount + 1),
+        client: entryProject?.client || '',
+        project_id: form.project_id,
+        week_ending: weekEnding,
+        day_name: day.dayName,
+        entry_date: day.date,
+        category: form.category,
+        time_block: form.time_block,
+        time_value: timeBlock.numericValue,
+        feature_tag: form.feature_tag || null,
+        notes: form.notes || null,
+        status: 'draft',
+      }
+
+      const { error: insertErr } = await supabase.from('timesheet_entries').insert(row)
+      if (insertErr) throw insertErr
+
+      setSuccess(true)
+      // Brief delay so user sees the success state, then close and refresh
+      setTimeout(() => onSaved(), 600)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const statusBadgeClass = (status) => {
+    if (status === 'submitted') return 'text-primary bg-primary/10 border-primary/20'
+    if (status === 'signed_off') return 'text-green-400 bg-green-400/10 border-green-400/20'
+    if (status === 'returned') return 'text-amber-400 bg-amber-400/10 border-amber-400/20'
+    return 'text-on-surface-variant bg-white/5 border-white/10'
+  }
+
+  return (
+    <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4" style={{ background: 'var(--modal-overlay)' }}>
+      <div className="glass-card rounded-2xl w-full max-w-lg p-6 space-y-5 max-h-[90vh] overflow-y-auto" style={{ background: 'var(--color-surface-container)' }}>
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-headline font-bold text-xl text-on-surface">{day.dayName}</h3>
+            <p className="text-sm text-on-surface-variant">{formatDate(day.date)}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all">
+            <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>close</span>
+          </button>
+        </div>
+
+        {/* Existing entries */}
+        {existingEntries.length > 0 && (
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-outline mb-2">
+              Existing entries ({existingEntries.length})
+            </p>
+            <div className="space-y-2">
+              {existingEntries.map((entry) => (
+                <div key={entry.id} className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border-subtle)' }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-on-surface">{entry.projects?.name || 'No project'}</span>
+                      <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${statusBadgeClass(entry.status)}`}>
+                        {entry.status === 'signed_off' ? 'Signed off' : entry.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-on-surface-variant mt-0.5">{entry.category} - {entry.time_block}</p>
+                  </div>
+                  <span className="text-sm font-bold text-on-surface tabular-nums">{Number(entry.time_value)}d</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Divider */}
+        <div style={{ borderTop: '1px solid var(--glass-border-subtle)' }} />
+
+        {/* New entry form */}
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-outline mb-3">Add new entry</p>
+
+          <div className="space-y-3">
+            {/* Project */}
+            <div>
+              <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Project</label>
+              {userProjects.length > 0 ? (
+                <select
+                  value={form.project_id}
+                  onChange={(e) => updateField('project_id', e.target.value)}
+                  className="w-full rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
+                  style={{ background: 'var(--color-surface-variant)', border: 'none' }}
+                >
+                  <option value="">Select project</option>
+                  {userProjects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.client})</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-xs text-on-surface-variant italic py-1">No projects assigned.</p>
+              )}
+            </div>
+
+            {/* Category + Time Block */}
+            <div className={`grid grid-cols-1 ${category?.showReference ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-3`}>
+              <div>
+                <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Category</label>
+                <select
+                  value={form.category}
+                  onChange={(e) => updateField('category', e.target.value)}
+                  className="w-full rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
+                  style={{ background: 'var(--color-surface-variant)', border: 'none' }}
+                >
+                  <option value="">Select category</option>
+                  {CATEGORIES.map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Time Block</label>
+                <select
+                  value={form.time_block}
+                  onChange={(e) => updateField('time_block', e.target.value)}
+                  className="w-full rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
+                  style={{ background: 'var(--color-surface-variant)', border: 'none' }}
+                >
+                  <option value="">Select time</option>
+                  {TIME_BLOCKS.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
+              {category?.showReference && (
+                <div>
+                  <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Reference</label>
+                  <input
+                    type="text"
+                    value={form.feature_tag}
+                    onChange={(e) => updateField('feature_tag', e.target.value)}
+                    className="w-full rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
+                    style={{ background: 'var(--color-surface-variant)', border: 'none' }}
+                    placeholder={category.referencePlaceholder}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Notes */}
+            {form.category && (
+              <div>
+                <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Notes</label>
+                <textarea
+                  value={form.notes}
+                  onChange={(e) => updateField('notes', e.target.value)}
+                  className="w-full rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none resize-none"
+                  style={{ background: 'var(--color-surface-variant)', border: 'none' }}
+                  placeholder="Describe your work..."
+                  rows={2}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Error / success */}
+        {error && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm" style={{ background: 'rgba(255,113,108,0.06)', color: '#ff716c' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>error</span>
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm" style={{ background: 'rgba(74,222,128,0.06)', color: '#4ade80' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>check_circle</span>
+            Entry saved!
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-4 pt-1">
+          <button onClick={onClose} className="text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors">Cancel</button>
+          <button
+            onClick={handleSave}
+            disabled={!canSave || saving || success}
+            className="signature-gradient-bg text-white rounded-xl px-5 py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:transform-none flex items-center gap-2"
+          >
+            {saving ? 'Saving...' : success ? 'Saved!' : 'Save entry'}
+          </button>
+        </div>
       </div>
     </div>
   )
