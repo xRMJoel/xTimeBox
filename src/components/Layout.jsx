@@ -19,6 +19,7 @@ export default function Layout({ children }) {
   const navItems = [
     { to: '/home', label: 'Home' },
     { to: '/my-entries', label: 'My Entries' },
+    { to: '/reports', label: 'Reports' },
   ]
 
   if (isManager) {
@@ -66,7 +67,7 @@ export default function Layout({ children }) {
               {navItems.map((item) => {
                 const isActive = location.pathname === item.to ||
                   (item.to !== '/home' && location.pathname.startsWith(item.to))
-                const icon = item.to === '/home' ? 'home' : item.to === '/my-entries' ? 'description' : 'admin_panel_settings'
+                const icon = item.to === '/home' ? 'home' : item.to === '/my-entries' ? 'description' : item.to === '/reports' ? 'assessment' : 'admin_panel_settings'
                 return (
                   <Link
                     key={item.to}
@@ -195,7 +196,7 @@ export default function Layout({ children }) {
                     } : {}}
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-                      {item.to === '/home' ? 'home' : item.to === '/my-entries' ? 'description' : item.to === '/admin' ? 'admin_panel_settings' : 'circle'}
+                      {item.to === '/home' ? 'home' : item.to === '/my-entries' ? 'description' : item.to === '/reports' ? 'assessment' : item.to === '/admin' ? 'admin_panel_settings' : 'circle'}
                     </span>
                     {item.label}
                   </Link>

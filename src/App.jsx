@@ -12,6 +12,7 @@ import TimesheetPage from './pages/TimesheetPage'
 import MyEntriesPage from './pages/MyEntriesPage'
 import AdminPage from './pages/AdminPage'
 import ProfilePage from './pages/ProfilePage'
+import ReportsPage from './pages/ReportsPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 
@@ -74,6 +75,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Layout><ProfilePage /></Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute>
+            <Layout><ReportsPage /></Layout>
           </ProtectedRoute>
         }
       />
