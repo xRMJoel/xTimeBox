@@ -93,14 +93,19 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
   const weekStatus = getWeekStatus(entries)
   const hasDrafts = entries.some((e) => e.status === 'draft' || e.status === 'returned')
   const hasReturned = entries.some((e) => e.status === 'returned')
-  const clients = [...new Set(entries.map((e) => e.client))].join(', ')
+  const projectNames = [...new Set(entries.map((e) => e.projects?.name || e.client).filter(Boolean))].join(', ')
 
-  const dayGroups = entries.reduce((groups, entry) => {
-    if (!groups[entry.entry_date]) groups[entry.entry_date] = []
-    groups[entry.entry_date].push(entry)
+  // Group entries by project, then by day within each project
+  const projectGroups = entries.reduce((groups, entry) => {
+    const projectName = entry.projects?.name || 'No project'
+    const projectKey = entry.project_id || '_none'
+    if (!groups[projectKey]) groups[projectKey] = { name: projectName, client: entry.client, entries: [] }
+    groups[projectKey].entries.push(entry)
     return groups
   }, {})
-  const sortedDays = Object.keys(dayGroups).sort()
+  const sortedProjectKeys = Object.keys(projectGroups).sort((a, b) =>
+    projectGroups[a].name.localeCompare(projectGroups[b].name)
+  )
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden">
@@ -125,7 +130,7 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
               <StatusBadge status={weekStatus} />
             </div>
             <p className="text-on-surface-variant text-sm mt-0.5">
-              {clients} · {totalDays} days · {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+              {projectNames} · {totalDays} days · {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
             </p>
           </div>
         </div>
@@ -168,26 +173,50 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
             </div>
           )}
 
-          {/* Day groups */}
+          {/* Project groups */}
           <div className="divide-y divide-[var(--glass-border-subtle)]">
-            {sortedDays.map((date) => (
-              <div key={date} className="px-6 py-4">
-                <div className="font-headline font-bold text-on-surface mb-2">
-                  {dayGroups[date][0].day_name}, <span className="text-outline">{formatDate(date)}</span>
+            {sortedProjectKeys.map((projectKey) => {
+              const project = projectGroups[projectKey]
+              const projectTotal = project.entries.reduce((sum, e) => sum + Number(e.time_value), 0)
+              // Group this project's entries by day
+              const dayGroups = project.entries.reduce((g, e) => { (g[e.entry_date] ||= []).push(e); return g }, {})
+              const sortedDays = Object.keys(dayGroups).sort()
+
+              return (
+                <div key={projectKey} className="px-6 py-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-primary" style={{ fontSize: '18px' }}>folder</span>
+                      <div>
+                        <span className="font-headline font-bold text-on-surface">{project.name}</span>
+                        {project.client && <span className="text-outline text-sm ml-2">({project.client})</span>}
+                      </div>
+                    </div>
+                    <span className="text-primary font-bold text-sm">{projectTotal} days</span>
+                  </div>
+                  <div className="space-y-3 pl-8">
+                    {sortedDays.map((date) => (
+                      <div key={date}>
+                        <div className="text-xs font-bold uppercase tracking-widest text-outline mb-1.5">
+                          {dayGroups[date][0].day_name}, {formatDate(date)}
+                        </div>
+                        <div className="space-y-2">
+                          {dayGroups[date].map((entry) => (
+                            <EntryCard
+                              key={entry.id}
+                              entry={entry}
+                              onEdit={onEdit}
+                              onDelete={onDelete}
+                              readonly={entry.status === 'signed_off'}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  {dayGroups[date].map((entry) => (
-                    <EntryCard
-                      key={entry.id}
-                      entry={entry}
-                      onEdit={onEdit}
-                      onDelete={onDelete}
-                      readonly={entry.status === 'signed_off'}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </>
       )}

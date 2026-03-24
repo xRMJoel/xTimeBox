@@ -36,7 +36,7 @@ export function useEntries() {
     try {
       let query = supabase
         .from('timesheet_entries')
-        .select('*')
+        .select('*, projects(name)')
         .eq('user_id', userId)
         .order('entry_date', { ascending: false })
         .order('created_at', { ascending: false })
