@@ -1,7 +1,8 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { getCurrentWeekFriday, getWeekDates, CATEGORIES, formatDate } from '../lib/constants'
+import { exportMonthlyProjectPDF } from '../lib/pdfExport'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 // ────────────────────────────────────────────────────────
@@ -1505,6 +1506,29 @@ function MonthlyProjectReport({ user }) {
 
   const selectedProjectObj = projects.find((p) => p.id === selectedProject)
   const monthLabel = new Date(monthStart + '-01T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+  const [exporting, setExporting] = useState(false)
+
+  const handleExportPDF = useCallback(async () => {
+    if (!selectedProjectObj || entries.length === 0) return
+    setExporting(true)
+    try {
+      await exportMonthlyProjectPDF({
+        projectName: selectedProjectObj.name,
+        client: selectedProjectObj.client || '',
+        monthLabel,
+        grandTotal,
+        totalWeeks,
+        totalEntries,
+        weekData,
+        allCategories,
+        referenceData,
+      })
+    } catch (err) {
+      console.error('PDF export failed:', err)
+    } finally {
+      setExporting(false)
+    }
+  }, [selectedProjectObj, entries.length, monthLabel, grandTotal, totalWeeks, totalEntries, weekData, allCategories, referenceData])
 
   function shiftMonth(dir) {
     const d = new Date(monthStart + '-01T12:00:00')
@@ -1584,6 +1608,21 @@ function MonthlyProjectReport({ user }) {
             })}
           </div>
         </div>
+
+        {/* Export button */}
+        {entries.length > 0 && (
+          <button
+            onClick={handleExportPDF}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ml-auto"
+            style={{ background: 'rgba(0,201,255,0.12)', border: '1px solid rgba(0,201,255,0.3)', color: '#00C9FF' }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+              {exporting ? 'hourglass_empty' : 'picture_as_pdf'}
+            </span>
+            {exporting ? 'Exporting...' : 'Export to PDF'}
+          </button>
+        )}
       </div>
 
       {/* Report body */}
