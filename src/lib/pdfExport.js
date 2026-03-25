@@ -1,9 +1,10 @@
 // Dynamic CDN loading for jsPDF + autoTable
-let jsPDFLoaded = null
+let jsPDFRef = null
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return }
+    const existing = document.querySelector(`script[src="${src}"]`)
+    if (existing) { existing.remove() } // remove stale tags so we can retry
     const s = document.createElement('script')
     s.src = src
     s.onload = resolve
@@ -13,28 +14,42 @@ function loadScript(src) {
 }
 
 async function ensureJsPDF() {
-  if (jsPDFLoaded) return jsPDFLoaded
-  jsPDFLoaded = (async () => {
-    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js')
-    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js')
-    return window.jspdf
-  })()
-  return jsPDFLoaded
+  if (jsPDFRef) return jsPDFRef
+
+  // Try multiple CDNs in case one is blocked
+  const cdns = [
+    {
+      jspdf: 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      autotable: 'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',
+    },
+    {
+      jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+      autotable: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
+    },
+    {
+      jspdf: 'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      autotable: 'https://unpkg.com/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',
+    },
+  ]
+
+  for (const cdn of cdns) {
+    try {
+      await loadScript(cdn.jspdf)
+      await loadScript(cdn.autotable)
+      if (window.jspdf) {
+        jsPDFRef = window.jspdf
+        return jsPDFRef
+      }
+    } catch (e) {
+      console.warn('CDN failed, trying next:', e.message)
+    }
+  }
+
+  throw new Error('Could not load PDF library from any CDN. Check your internet connection.')
 }
 
 /**
  * Export the Monthly Project Report as a styled PDF.
- *
- * @param {Object} opts
- * @param {string} opts.projectName
- * @param {string} opts.client
- * @param {string} opts.monthLabel       e.g. "March 2026"
- * @param {number} opts.grandTotal
- * @param {number} opts.totalWeeks
- * @param {number} opts.totalEntries
- * @param {Array}  opts.weekData         [{ weekEnding, categories: {cat: val}, total }]
- * @param {Array}  opts.allCategories    sorted category names
- * @param {Array}  opts.referenceData    [{ reference, categories: {cat: val}, total }]
  */
 export async function exportMonthlyProjectPDF({
   projectName, client, monthLabel, grandTotal, totalWeeks, totalEntries,
@@ -46,7 +61,6 @@ export async function exportMonthlyProjectPDF({
 
   // Colours
   const primary = [0, 201, 255]      // cyan
-  const dark = [15, 23, 42]          // slate-900
   const mid = [100, 116, 139]        // slate-500
   const headerBg = [30, 41, 59]      // slate-800
 
@@ -125,7 +139,6 @@ export async function exportMonthlyProjectPDF({
       0: { halign: 'left' },
       [allCategories.length + 1]: { textColor: primary, fontStyle: 'bold' },
     },
-    // Right-align all category + total columns
     didParseCell: (data) => {
       if (data.column.index > 0) data.cell.styles.halign = 'right'
     },
@@ -136,7 +149,6 @@ export async function exportMonthlyProjectPDF({
 
   // ── Days by Reference table ──
   if (referenceData.length > 0) {
-    // Check if we need a new page
     if (y > doc.internal.pageSize.getHeight() - 40) {
       doc.addPage()
       y = 15
