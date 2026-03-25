@@ -55,13 +55,13 @@ function buildReportHTML({
   const border = '#e2e8f0'    // slate-200
   const headerBg = '#0f172a'
 
-  const th = `style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif"`
-  const thLeft = `style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif"`
-  const td = `style="padding:8px 12px;text-align:right;font-size:12px;color:${dark};font-family:'Nunito Sans',sans-serif"`
-  const tdLeft = `style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:${dark};font-family:'Nunito Sans',sans-serif"`
-  const tdTotal = `style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:${primary};font-family:'Nunito Sans',sans-serif"`
-  const tfLeft = `style="padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:${primary};font-family:'Montserrat',sans-serif"`
-  const tf = `style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:${primary};font-family:'Nunito Sans',sans-serif"`
+  const th = `style="padding:10px 12px;text-align:right;vertical-align:middle;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif"`
+  const thLeft = `style="padding:10px 12px;text-align:left;vertical-align:middle;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif"`
+  const td = `style="padding:10px 12px;text-align:right;vertical-align:middle;font-size:12px;color:${dark};font-family:'Nunito Sans',sans-serif"`
+  const tdLeft = `style="padding:10px 12px;text-align:left;vertical-align:middle;font-size:12px;font-weight:600;color:${dark};font-family:'Nunito Sans',sans-serif"`
+  const tdTotal = `style="padding:10px 12px;text-align:right;vertical-align:middle;font-size:12px;font-weight:700;color:${primary};font-family:'Nunito Sans',sans-serif"`
+  const tfLeft = `style="padding:10px 12px;text-align:left;vertical-align:middle;font-size:12px;font-weight:700;color:${primary};font-family:'Montserrat',sans-serif"`
+  const tf = `style="padding:10px 12px;text-align:right;vertical-align:middle;font-size:12px;font-weight:700;color:${primary};font-family:'Nunito Sans',sans-serif"`
 
   // Category table rows
   const catRows = weekData.map((w, i) => {
@@ -126,7 +126,7 @@ function buildReportHTML({
       <tr style="background:${headerBg}">
         <th ${thLeft}>Week Ending</th>
         ${allCategories.map(c => `<th ${th}>${c}</th>`).join('')}
-        <th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif">Total</th>
+        <th style="padding:10px 12px;text-align:right;vertical-align:middle;font-size:11px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif">Total</th>
       </tr>
     </thead>
     <tbody>${catRows}</tbody>
@@ -147,7 +147,7 @@ function buildReportHTML({
       <tr style="background:${headerBg}">
         <th ${thLeft}>Reference</th>
         ${allCategories.map(c => `<th ${th}>${c}</th>`).join('')}
-        <th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif">Total</th>
+        <th style="padding:10px 12px;text-align:right;vertical-align:middle;font-size:11px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif">Total</th>
       </tr>
     </thead>
     <tbody>${refRows}</tbody>
