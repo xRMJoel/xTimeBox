@@ -1418,7 +1418,9 @@ function MonthlyProjectReport({ user }) {
   }, [user?.id])
 
   // Load entries when project, month, or status filter changes
+  // Include 'returned' alongside 'draft' since returned entries are back with the user
   const activeStatuses = Object.entries(includeStatuses).filter(([, v]) => v).map(([k]) => k)
+  if (includeStatuses.draft && !activeStatuses.includes('returned')) activeStatuses.push('returned')
 
   useEffect(() => {
     if (!selectedProject || !monthStart || activeStatuses.length === 0) {
