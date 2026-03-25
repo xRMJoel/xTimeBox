@@ -1392,6 +1392,11 @@ function MonthlyProjectReport({ user }) {
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(false)
   const [projectsLoading, setProjectsLoading] = useState(true)
+  const [includeStatuses, setIncludeStatuses] = useState({ signed_off: true, submitted: true, draft: false })
+
+  function toggleStatus(status) {
+    setIncludeStatuses((prev) => ({ ...prev, [status]: !prev[status] }))
+  }
 
   // Load projects the user is assigned to
   useEffect(() => {
@@ -1412,9 +1417,14 @@ function MonthlyProjectReport({ user }) {
       })
   }, [user?.id])
 
-  // Load entries when project or month changes
+  // Load entries when project, month, or status filter changes
+  const activeStatuses = Object.entries(includeStatuses).filter(([, v]) => v).map(([k]) => k)
+
   useEffect(() => {
-    if (!selectedProject || !monthStart) return
+    if (!selectedProject || !monthStart || activeStatuses.length === 0) {
+      setEntries([])
+      return
+    }
     setLoading(true)
 
     const d = new Date(monthStart + '-01T12:00:00')
@@ -1428,10 +1438,10 @@ function MonthlyProjectReport({ user }) {
       .eq('project_id', selectedProject)
       .gte('entry_date', from)
       .lte('entry_date', to)
-      .in('status', ['draft', 'submitted', 'signed_off'])
+      .in('status', activeStatuses)
       .order('entry_date')
       .then(({ data }) => { setEntries(data || []); setLoading(false) })
-  }, [selectedProject, monthStart])
+  }, [selectedProject, monthStart, activeStatuses.join(',')])
 
   // Group entries by week_ending, then aggregate categories
   const weekData = useMemo(() => {
@@ -1506,6 +1516,36 @@ function MonthlyProjectReport({ user }) {
             <button onClick={() => shiftMonth(1)} className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all">
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>chevron_right</span>
             </button>
+          </div>
+        </div>
+
+        {/* Status filter */}
+        <div>
+          <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Include</label>
+          <div className="flex items-center gap-1">
+            {[
+              { key: 'signed_off', label: 'Signed off', colour: 'green' },
+              { key: 'submitted', label: 'Submitted', colour: 'cyan' },
+              { key: 'draft', label: 'Draft', colour: 'gray' },
+            ].map(({ key, label, colour }) => {
+              const active = includeStatuses[key]
+              const colours = {
+                green: { bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.4)', text: '#22c55e' },
+                cyan: { bg: 'rgba(0,201,255,0.15)', border: 'rgba(0,201,255,0.4)', text: '#00C9FF' },
+                gray: { bg: 'rgba(255,255,255,0.08)', border: 'rgba(255,255,255,0.2)', text: 'var(--color-on-surface-variant)' },
+              }[colour]
+              return (
+                <button
+                  key={key}
+                  onClick={() => toggleStatus(key)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                  style={active
+                    ? { background: colours.bg, border: `1px solid ${colours.border}`, color: colours.text }
+                    : { background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--color-outline)' }
+                  }
+                >{label}</button>
+              )
+            })}
           </div>
         </div>
       </div>

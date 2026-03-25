@@ -19,16 +19,14 @@ function shiftMonth(monthStart, delta) {
   return d.toISOString().slice(0, 10)
 }
 
-// ── Collapsible week section for approval detail view ──
-function CollapsibleWeek({ weekEnding, weekGroups, onReturnWeek, onDeleteWeek, onDeleteEntry }) {
+// ── Collapsible week section for approval detail view with per-week sign-off ──
+function CollapsibleWeekAdmin({ weekEnding, weekEntries, weekTotal, isSignedOff, hasSubmitted, hasDrafts, onSignOff, onUnsignOff, onReturnWeek, onDeleteWeek, onDeleteEntry, actionLoading }) {
   const [open, setOpen] = useState(false)
-  const weekEntries = weekGroups[weekEnding]
-  const weekTotal = weekEntries.reduce((sum, e) => sum + Number(e.time_value), 0)
   const dayGroups = weekEntries.reduce((g, e) => { (g[e.entry_date] ||= []).push(e); return g }, {})
   const sortedDays = Object.keys(dayGroups).sort()
 
   return (
-    <div className="glass-card rounded-2xl overflow-hidden">
+    <div className={`glass-card rounded-2xl overflow-hidden ${isSignedOff ? 'ring-1 ring-green-400/20' : ''}`}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -40,21 +38,48 @@ function CollapsibleWeek({ weekEnding, weekGroups, onReturnWeek, onDeleteWeek, o
             {open ? 'expand_more' : 'chevron_right'}
           </span>
           <span className="text-base font-medium text-on-surface">Week ending {formatDate(weekEnding)}</span>
-        </div>
-        <div className="flex items-center gap-4">
-          {weekEntries.some((e) => e.status === 'submitted') && (
-            <span onClick={(e) => { e.stopPropagation(); onReturnWeek() }}
-              className="text-sm text-amber-400 hover:text-amber-300 font-medium transition-colors flex items-center gap-1 cursor-pointer">
-              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>undo</span>
-              Return week
+          {isSignedOff && (
+            <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-green-400 bg-green-400/10 border border-green-400/20">
+              Signed off
             </span>
           )}
-          <span onClick={(e) => { e.stopPropagation(); onDeleteWeek() }}
-            className="text-sm text-error hover:text-error-dim font-medium transition-colors flex items-center gap-1 cursor-pointer">
+          {!isSignedOff && hasSubmitted && (
+            <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-primary bg-primary/10 border border-primary/20">
+              Submitted
+            </span>
+          )}
+          {!isSignedOff && !hasSubmitted && hasDrafts && (
+            <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-on-surface-variant bg-white/5 border border-white/10">
+              Draft
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+          {isSignedOff ? (
+            <button onClick={onUnsignOff} disabled={actionLoading}
+              className="text-sm text-amber-400 hover:text-amber-300 font-medium transition-colors flex items-center gap-1 disabled:opacity-50">
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>lock_open</span>
+              Revoke
+            </button>
+          ) : hasSubmitted ? (
+            <button onClick={onSignOff} disabled={actionLoading}
+              className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-50">
+              {actionLoading ? '...' : 'Sign off'}
+            </button>
+          ) : null}
+          {!isSignedOff && hasSubmitted && (
+            <button onClick={onReturnWeek}
+              className="text-sm text-amber-400 hover:text-amber-300 font-medium transition-colors flex items-center gap-1">
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>undo</span>
+              Return
+            </button>
+          )}
+          <button onClick={onDeleteWeek}
+            className="text-sm text-error hover:text-error-dim font-medium transition-colors flex items-center gap-1">
             <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>delete</span>
-            Delete week
-          </span>
-          <span className="text-base font-bold text-primary ml-2">{weekTotal} days</span>
+            Delete
+          </button>
+          <span className="text-base font-bold text-primary ml-1">{weekTotal} days</span>
         </div>
       </button>
       {open && (
@@ -80,7 +105,7 @@ function CollapsibleWeek({ weekEnding, weekGroups, onReturnWeek, onDeleteWeek, o
 function ApprovalsTab() {
   const { user } = useAuth()
   const { fetchAllEntries, returnWeekEntries, deleteEntry, loading } = useEntries()
-  const { signOffMonth, revokeSignoff, fetchSignoffs, fetchAdminSummary } = useSignoffs()
+  const { signOffMonth, revokeSignoff, signOffWeek, unsignOffWeek, fetchSignoffs, fetchAdminSummary } = useSignoffs()
   const [monthStart, setMonthStart] = useState(currentMonthStart())
   const [entries, setEntries] = useState([])
   const [projects, setProjects] = useState([])
@@ -105,25 +130,18 @@ function ApprovalsTab() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // Group entries: project -> user -> weeks
-  const grouped = {}
-  const unassigned = { users: {} }
-
+  // Group entries by user -> weeks
+  const userMap = {}
   for (const entry of entries) {
-    const projectId = entry.project_id || '__unassigned__'
-    const project = projects.find((p) => p.id === projectId)
-    const projectName = project?.name || 'Unassigned'
     const userId = entry.user_id
     const userName = entry.profiles?.full_name || entry.profiles?.email || 'Unknown'
-
-    const bucket = projectId === '__unassigned__' ? unassigned : (grouped[projectId] ||= { name: projectName, client: project?.client, users: {} })
-    const userBucket = bucket.users[userId] ||= { name: userName, email: entry.profiles?.email, entries: [] }
-    userBucket.entries.push(entry)
+    if (!userMap[userId]) userMap[userId] = { name: userName, email: entry.profiles?.email, entries: [] }
+    userMap[userId].entries.push(entry)
   }
+  const userList = Object.entries(userMap).sort(([, a], [, b]) => a.name.localeCompare(b.name))
 
   // Count submitted entries needing review
-  const allUserBuckets = [...Object.values(grouped).flatMap((p) => Object.entries(p.users).map(([uid, u]) => ({ ...u, uid }))), ...Object.entries(unassigned.users).map(([uid, u]) => ({ ...u, uid }))]
-  const pendingCount = allUserBuckets.filter((u) => u.entries.some((e) => e.status === 'submitted')).length
+  const pendingCount = userList.filter(([, u]) => u.entries.some((e) => e.status === 'submitted')).length
 
   // Detail view for a user
   if (selectedUser) {
@@ -133,22 +151,31 @@ function ApprovalsTab() {
     const sortedWeeks = Object.keys(weekGroups).sort()
     const totalDays = userEntries.reduce((sum, e) => sum + Number(e.time_value), 0)
 
-    async function handleSignOff() {
+    async function handleSignOffWeek(weekEnding) {
       setActionLoading(true)
       try {
-        await signOffMonth(selectedUser.userId, monthStart)
-        setMessage({ type: 'success', text: 'Month signed off.' })
+        await signOffWeek(selectedUser.userId, weekEnding)
+        setMessage({ type: 'success', text: `Week ending ${formatDate(weekEnding)} signed off.` })
         await loadData()
       } catch (err) { setMessage({ type: 'error', text: err.message }) }
       finally { setActionLoading(false) }
     }
 
-    async function handleRevoke() {
-      if (!confirm('Revoke this sign-off? Entries will be unlocked for editing.')) return
+    async function handleUnsignOffWeek(weekEnding) {
       setActionLoading(true)
       try {
-        await revokeSignoff(selectedUser.userId, monthStart)
-        setMessage({ type: 'success', text: 'Sign-off revoked.' })
+        await unsignOffWeek(selectedUser.userId, weekEnding)
+        setMessage({ type: 'success', text: `Sign-off revoked for week ending ${formatDate(weekEnding)}.` })
+        await loadData()
+      } catch (err) { setMessage({ type: 'error', text: err.message }) }
+      finally { setActionLoading(false) }
+    }
+
+    async function handleSignOffMonth() {
+      setActionLoading(true)
+      try {
+        await signOffMonth(selectedUser.userId, monthStart)
+        setMessage({ type: 'success', text: 'All weeks signed off for the month.' })
         await loadData()
       } catch (err) { setMessage({ type: 'error', text: err.message }) }
       finally { setActionLoading(false) }
@@ -211,42 +238,56 @@ function ApprovalsTab() {
           </div>
         )}
 
-        {/* Sign-off status */}
-        <div className={`glass-card rounded-2xl p-5 flex items-center justify-between ${userSignoff ? 'border-green-400/20' : ''}`}>
-          {userSignoff ? (
-            <>
+        {/* Month-level sign-off action */}
+        {(() => {
+          const hasUnsignedSubmitted = userEntries.some((e) => e.status === 'submitted')
+          const allSignedOff = userEntries.length > 0 && userEntries.every((e) => e.status === 'signed_off')
+          return (
+            <div className={`glass-card rounded-2xl p-5 flex items-center justify-between ${allSignedOff ? 'border-green-400/20' : ''}`}>
               <div>
-                <p className="text-sm text-green-400 font-medium">Signed off</p>
-                <p className="text-xs text-on-surface-variant">By {userSignoff.signer?.full_name} on {new Date(userSignoff.signed_off_at).toLocaleDateString('en-GB')}</p>
+                <p className={`text-sm font-medium ${allSignedOff ? 'text-green-400' : 'text-on-surface'}`}>
+                  {allSignedOff ? 'All weeks signed off' : `${userEntries.length} entries for this month`}
+                </p>
+                <p className="text-xs text-on-surface-variant">
+                  {sortedWeeks.length} {sortedWeeks.length === 1 ? 'week' : 'weeks'} · {totalDays} days total
+                </p>
               </div>
-              <button onClick={handleRevoke} disabled={actionLoading} className="text-sm text-error hover:text-error-dim font-medium transition-colors disabled:opacity-50">
-                Revoke sign-off
-              </button>
-            </>
-          ) : (
-            <>
-              <div>
-                <p className="text-sm text-on-surface">Not yet signed off</p>
-                <p className="text-xs text-on-surface-variant">{userEntries.length} entries for this month</p>
-              </div>
-              <button onClick={handleSignOff} disabled={actionLoading || userEntries.length === 0}
-                className="bg-green-600 hover:bg-green-700 text-white rounded-xl px-5 py-2.5 text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                {actionLoading ? 'Processing...' : 'Sign off month'}
-              </button>
-            </>
-          )}
-        </div>
+              {hasUnsignedSubmitted && (
+                <button onClick={handleSignOffMonth} disabled={actionLoading}
+                  className="bg-green-600 hover:bg-green-700 text-white rounded-xl px-5 py-2.5 text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  {actionLoading ? 'Processing...' : 'Sign off all weeks'}
+                </button>
+              )}
+            </div>
+          )
+        })()}
 
-        {sortedWeeks.map((weekEnding) => (
-          <CollapsibleWeek
-            key={weekEnding}
-            weekEnding={weekEnding}
-            weekGroups={weekGroups}
-            onReturnWeek={() => setReturningWeek(weekEnding)}
-            onDeleteWeek={() => setDeletingWeek(weekEnding)}
-            onDeleteEntry={handleDeleteEntry}
-          />
-        ))}
+        {/* Weeks with per-week actions */}
+        {sortedWeeks.map((weekEnding) => {
+          const we = weekGroups[weekEnding]
+          const weekTotal = we.reduce((sum, e) => sum + Number(e.time_value), 0)
+          const weekSignedOff = we.every((e) => e.status === 'signed_off')
+          const weekSubmitted = we.some((e) => e.status === 'submitted')
+          const weekHasDrafts = we.some((e) => e.status === 'draft')
+
+          return (
+            <CollapsibleWeekAdmin
+              key={weekEnding}
+              weekEnding={weekEnding}
+              weekEntries={we}
+              weekTotal={weekTotal}
+              isSignedOff={weekSignedOff}
+              hasSubmitted={weekSubmitted}
+              hasDrafts={weekHasDrafts}
+              onSignOff={() => handleSignOffWeek(weekEnding)}
+              onUnsignOff={() => handleUnsignOffWeek(weekEnding)}
+              onReturnWeek={() => setReturningWeek(weekEnding)}
+              onDeleteWeek={() => setDeletingWeek(weekEnding)}
+              onDeleteEntry={handleDeleteEntry}
+              actionLoading={actionLoading}
+            />
+          )
+        })}
 
         {/* Return modal */}
         {returningWeek && (
@@ -344,96 +385,46 @@ function ApprovalsTab() {
         </div>
       )}
 
-      {/* Project groups */}
-      {Object.entries(grouped).map(([projectId, project]) => (
-        <ProjectGroup
-          key={projectId}
-          project={project}
-          signoffs={signoffs}
-          onSelectUser={(userId, userName) => setSelectedUser({ userId, userName })}
-        />
-      ))}
+      {/* User list */}
+      <div className="glass-card rounded-2xl overflow-hidden divide-y divide-[var(--glass-border-subtle)]">
+        {userList.map(([userId, userData]) => {
+          const userTotal = userData.entries.reduce((sum, e) => sum + Number(e.time_value), 0)
+          const userSignoff = signoffs.find((s) => s.user_id === userId)
+          const hasSubmitted = userData.entries.some((e) => e.status === 'submitted')
+          const hasReturned = userData.entries.some((e) => e.status === 'returned')
+          const allSignedOff = userData.entries.every((e) => e.status === 'signed_off')
+          const weekCount = new Set(userData.entries.map((e) => e.week_ending)).size
 
-      {/* Unassigned entries */}
-      {Object.keys(unassigned.users).length > 0 && (
-        <ProjectGroup
-          project={{ name: 'Unassigned', client: 'No project', users: unassigned.users }}
-          signoffs={signoffs}
-          onSelectUser={(userId, userName) => setSelectedUser({ userId, userName })}
-        />
-      )}
-    </div>
-  )
-}
-
-function ProjectGroup({ project, signoffs, onSelectUser }) {
-  const [expanded, setExpanded] = useState(true)
-  const userList = Object.entries(project.users)
-  const totalDays = userList.reduce((sum, [, u]) => sum + u.entries.reduce((s, e) => s + Number(e.time_value), 0), 0)
-  const pendingUsers = userList.filter(([, u]) => u.entries.some((e) => e.status === 'submitted'))
-
-  return (
-    <div className="glass-card rounded-2xl overflow-hidden">
-      <button onClick={() => setExpanded(!expanded)}
-        className="w-full px-6 py-4 flex items-center justify-between text-left transition-colors hover:bg-[var(--white-alpha-2)]"
-        style={{ background: expanded ? 'var(--week-header-bg)' : 'transparent' }}>
-        <div className="flex items-center gap-3">
-          <span className="material-symbols-outlined text-on-surface-variant transition-transform duration-200"
-            style={{ fontSize: '20px', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>chevron_right</span>
-          <div>
-            <div className="flex items-center gap-3">
-              <h3 className="font-headline font-bold text-base text-on-surface">{project.name}</h3>
-              {project.client && <span className="text-xs text-on-surface-variant">{project.client}</span>}
-              {pendingUsers.length > 0 && (
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-primary bg-primary/10 border border-primary/20">
-                  {pendingUsers.length} pending
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-on-surface-variant">{userList.length} {userList.length === 1 ? 'user' : 'users'} · {totalDays} days</p>
-          </div>
-        </div>
-      </button>
-
-      {expanded && (
-        <div className="divide-y divide-[var(--glass-border-subtle)]">
-          {userList.map(([userId, userData]) => {
-            const userTotal = userData.entries.reduce((sum, e) => sum + Number(e.time_value), 0)
-            const userSignoff = signoffs.find((s) => s.user_id === userId)
-            const hasSubmitted = userData.entries.some((e) => e.status === 'submitted')
-            const hasReturned = userData.entries.some((e) => e.status === 'returned')
-            const allSignedOff = userSignoff != null
-
-            return (
-              <div key={userId} className="px-6 py-4 flex items-center justify-between hover:bg-[var(--white-alpha-2)] transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full signature-gradient-bg flex items-center justify-center text-white text-sm font-bold">
-                    {userData.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="font-medium text-on-surface text-base">{userData.name}</div>
-                    <div className="text-sm text-on-surface-variant">{userData.email} · {userTotal} days · {userData.entries.length} entries</div>
-                  </div>
+          return (
+            <div key={userId} className="px-6 py-4 flex items-center justify-between hover:bg-[var(--white-alpha-2)] transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full signature-gradient-bg flex items-center justify-center text-white text-sm font-bold">
+                  {userData.name.charAt(0).toUpperCase()}
                 </div>
-                <div className="flex items-center gap-3">
-                  {allSignedOff ? <StatusBadge status="signed_off" />
-                    : hasReturned ? <StatusBadge status="returned" />
-                    : hasSubmitted ? <StatusBadge status="submitted" />
-                    : <StatusBadge status="draft" />
-                  }
-                  <button onClick={() => onSelectUser(userId, userData.name)}
-                    className="text-primary hover:text-primary-dim font-medium transition-colors flex items-center gap-1 text-sm">
-                    Review <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_forward</span>
-                  </button>
+                <div>
+                  <div className="font-medium text-on-surface text-base">{userData.name}</div>
+                  <div className="text-sm text-on-surface-variant">{weekCount} {weekCount === 1 ? 'week' : 'weeks'} · {userTotal} days · {userData.entries.length} entries</div>
                 </div>
               </div>
-            )
-          })}
-        </div>
-      )}
+              <div className="flex items-center gap-3">
+                {allSignedOff ? <StatusBadge status="signed_off" />
+                  : hasReturned ? <StatusBadge status="returned" />
+                  : hasSubmitted ? <StatusBadge status="submitted" />
+                  : <StatusBadge status="draft" />
+                }
+                <button onClick={() => setSelectedUser({ userId, userName: userData.name })}
+                  className="text-primary hover:text-primary-dim font-medium transition-colors flex items-center gap-1 text-sm">
+                  Review <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_forward</span>
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
+
 
 // ══════════════════════════════════════════════
 // TAB 2: PROJECTS — CRUD

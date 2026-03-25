@@ -315,12 +315,48 @@ export function useSignoffs() {
     }
   }, [])
 
+  const signOffWeek = useCallback(async (userId, weekEnding) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { error: err } = await supabase.rpc('sign_off_week', {
+        p_user_id: userId,
+        p_week_ending: weekEnding,
+      })
+      if (err) throw err
+    } catch (e) {
+      setError(e.message)
+      throw e
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const unsignOffWeek = useCallback(async (userId, weekEnding) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { error: err } = await supabase.rpc('unsign_off_week', {
+        p_user_id: userId,
+        p_week_ending: weekEnding,
+      })
+      if (err) throw err
+    } catch (e) {
+      setError(e.message)
+      throw e
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   return {
     loading,
     error,
     fetchSignoffs,
     signOffMonth,
     revokeSignoff,
+    signOffWeek,
+    unsignOffWeek,
     fetchAdminSummary,
   }
 }
