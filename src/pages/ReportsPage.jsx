@@ -1434,7 +1434,7 @@ function MonthlyProjectReport({ user }) {
 
     supabase
       .from('timesheet_entries')
-      .select('id, entry_date, week_ending, time_value, category, day_name, notes, status, profiles!user_id(full_name), projects(name, client)')
+      .select('id, entry_date, week_ending, time_value, category, reference, day_name, notes, status, profiles!user_id(full_name), projects(name, client)')
       .eq('project_id', selectedProject)
       .gte('entry_date', from)
       .lte('entry_date', to)
@@ -1470,6 +1470,29 @@ function MonthlyProjectReport({ user }) {
   }, [weekData])
 
   const grandTotal = weekData.reduce((s, w) => s + w.total, 0)
+
+  // Aggregate by reference (monthly totals only)
+  const referenceData = useMemo(() => {
+    const refMap = {}
+    for (const e of entries) {
+      const ref = e.reference || 'No reference'
+      if (!refMap[ref]) refMap[ref] = { reference: ref, total: 0, category: e.category || 'Other' }
+      refMap[ref].total += Number(e.time_value || 0)
+    }
+    return Object.values(refMap).sort((a, b) => a.reference.localeCompare(b.reference))
+  }, [entries])
+
+  // Summary stats
+  const totalWeeks = weekData.length
+  const totalEntries = entries.length
+  const categoryTotals = useMemo(() => {
+    const map = {}
+    for (const e of entries) {
+      const cat = e.category || 'Other'
+      map[cat] = (map[cat] || 0) + Number(e.time_value || 0)
+    }
+    return Object.entries(map).sort((a, b) => b[1] - a[1])
+  }, [entries])
 
   const selectedProjectObj = projects.find((p) => p.id === selectedProject)
   const monthLabel = new Date(monthStart + '-01T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
@@ -1569,28 +1592,35 @@ function MonthlyProjectReport({ user }) {
         </div>
       ) : (
         <>
-          {/* Summary card */}
-          <div className="glass-card rounded-xl p-5" style={{ background: 'rgba(0,201,255,0.06)', border: '1px solid rgba(0,201,255,0.15)' }}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-outline mb-1">{selectedProjectObj?.name}</p>
-                <div className="flex items-baseline gap-3">
-                  <span className="text-3xl font-heading font-black text-primary tabular-nums">{grandTotal.toFixed(1)}</span>
-                  <span className="text-sm text-on-surface-variant">total days in {monthLabel}</span>
-                </div>
-              </div>
-              {selectedProjectObj?.client && (
-                <span className="text-sm text-on-surface-variant">{selectedProjectObj.client}</span>
-              )}
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="glass-card rounded-xl p-4" style={{ background: 'rgba(0,201,255,0.06)', border: '1px solid rgba(0,201,255,0.15)' }}>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-outline mb-1">Total days</p>
+              <span className="text-2xl font-heading font-black text-primary tabular-nums">{grandTotal.toFixed(1)}</span>
+            </div>
+            <div className="glass-card rounded-xl p-4">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-outline mb-1">Weeks</p>
+              <span className="text-2xl font-heading font-black text-on-surface tabular-nums">{totalWeeks}</span>
+            </div>
+            <div className="glass-card rounded-xl p-4">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-outline mb-1">Entries</p>
+              <span className="text-2xl font-heading font-black text-on-surface tabular-nums">{totalEntries}</span>
+            </div>
+            <div className="glass-card rounded-xl p-4">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-outline mb-1">Client</p>
+              <span className="text-sm font-bold text-on-surface">{selectedProjectObj?.client || '-'}</span>
             </div>
           </div>
 
-          {/* Week-by-week table */}
+          {/* Days by category (week-by-week table) */}
           <div className="glass-card rounded-xl overflow-hidden">
+            <div className="px-4 py-3" style={{ background: 'var(--week-header-bg)', borderBottom: '1px solid var(--glass-border-subtle)' }}>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline">Days by category</p>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ background: 'var(--week-header-bg)', borderBottom: '1px solid var(--glass-border-subtle)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--glass-border-subtle)' }}>
                     <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-outline">Week ending</th>
                     {allCategories.map((cat) => (
                       <th key={cat} className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-outline">{cat}</th>
@@ -1629,15 +1659,47 @@ function MonthlyProjectReport({ user }) {
             </div>
           </div>
 
+          {/* Days by reference (monthly totals) */}
+          {referenceData.length > 0 && (
+            <div className="glass-card rounded-xl overflow-hidden">
+              <div className="px-4 py-3" style={{ background: 'var(--week-header-bg)', borderBottom: '1px solid var(--glass-border-subtle)' }}>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline">Days by reference</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--glass-border-subtle)' }}>
+                      <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-outline">Reference</th>
+                      <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-outline">Category</th>
+                      <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-primary">Days</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {referenceData.map((ref) => (
+                      <tr key={ref.reference} className="border-t border-[var(--glass-border-subtle)] hover:bg-[var(--white-alpha-2)] transition-colors">
+                        <td className="px-4 py-3 font-medium text-on-surface">{ref.reference}</td>
+                        <td className="px-4 py-3 text-on-surface-variant">{ref.category}</td>
+                        <td className="text-right px-4 py-3 font-bold text-primary tabular-nums">{ref.total.toFixed(1)}d</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: 'rgba(0,201,255,0.04)', borderTop: '2px solid var(--glass-border)' }}>
+                      <td className="px-4 py-3 font-bold text-on-surface" colSpan={2}>Total</td>
+                      <td className="text-right px-4 py-3 font-black text-primary tabular-nums">{grandTotal.toFixed(1)}d</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Category summary bar chart */}
           {allCategories.length > 1 && (
             <div className="glass-card rounded-xl p-5 space-y-3">
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline">Category breakdown</p>
               <HorizontalBarChart
-                data={allCategories.map((cat) => ({
-                  label: cat,
-                  value: weekData.reduce((s, w) => s + (w.categories[cat] || 0), 0),
-                })).sort((a, b) => b.value - a.value)}
+                data={categoryTotals.map(([label, value]) => ({ label, value }))}
                 labelKey="label"
                 valueKey="value"
               />
