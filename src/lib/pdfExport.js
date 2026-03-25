@@ -59,25 +59,13 @@ async function fetchFontBase64(url) {
  */
 const fontCache = {}
 async function registerFonts(doc) {
-  // Static TTF files (not variable fonts) so jsPDF can render bold/normal correctly
-  // Montserrat from the official GitHub repo, Nunito Sans from Google Fonts static serving
+  // Local TTF files served from public/fonts/ (run scripts/download-pdf-fonts.mjs first)
+  // Falls back to CDN sources if local files aren't available
   const fonts = [
-    { name: 'Montserrat', style: 'bold', urls: [
-      'https://cdn.jsdelivr.net/gh/JulietaUla/Montserrat@master/fonts/ttf/Montserrat-Bold.ttf',
-      'https://raw.githubusercontent.com/JulietaUla/Montserrat/master/fonts/ttf/Montserrat-Bold.ttf',
-    ]},
-    { name: 'Montserrat', style: 'normal', urls: [
-      'https://cdn.jsdelivr.net/gh/JulietaUla/Montserrat@master/fonts/ttf/Montserrat-Regular.ttf',
-      'https://raw.githubusercontent.com/JulietaUla/Montserrat/master/fonts/ttf/Montserrat-Regular.ttf',
-    ]},
-    { name: 'NunitoSans', style: 'bold', urls: [
-      'https://cdn.jsdelivr.net/gh/googlefonts/nunitosans@v3.001/NunitoSans-Bold.ttf',
-      'https://raw.githubusercontent.com/googlefonts/nunitosans/v3.001/NunitoSans-Bold.ttf',
-    ]},
-    { name: 'NunitoSans', style: 'normal', urls: [
-      'https://cdn.jsdelivr.net/gh/googlefonts/nunitosans@v3.001/NunitoSans-Regular.ttf',
-      'https://raw.githubusercontent.com/googlefonts/nunitosans/v3.001/NunitoSans-Regular.ttf',
-    ]},
+    { name: 'Montserrat', style: 'bold', file: 'Montserrat-Bold.ttf' },
+    { name: 'Montserrat', style: 'normal', file: 'Montserrat-Regular.ttf' },
+    { name: 'NunitoSans', style: 'bold', file: 'NunitoSans-Bold.ttf' },
+    { name: 'NunitoSans', style: 'normal', file: 'NunitoSans-Regular.ttf' },
   ]
 
   for (const f of fonts) {
@@ -87,8 +75,15 @@ async function registerFonts(doc) {
       doc.addFont(`${cacheKey}.ttf`, f.name, f.style)
       continue
     }
+
+    // Try local first, then CDN fallbacks
+    const urls = [
+      `/fonts/${f.file}`,
+      `https://cdn.jsdelivr.net/gh/JulietaUla/Montserrat@master/fonts/ttf/${f.file}`,
+    ]
+
     let loaded = false
-    for (const url of f.urls) {
+    for (const url of urls) {
       try {
         const b64 = await fetchFontBase64(url)
         fontCache[cacheKey] = b64
@@ -97,10 +92,10 @@ async function registerFonts(doc) {
         loaded = true
         break
       } catch (e) {
-        console.warn(`Font URL failed for ${cacheKey}:`, url, e.message)
+        // silently try next
       }
     }
-    if (!loaded) console.warn(`Could not load ${cacheKey}, will fall back to helvetica`)
+    if (!loaded) console.warn(`Could not load font ${cacheKey} - run: node scripts/download-pdf-fonts.mjs`)
   }
 }
 
