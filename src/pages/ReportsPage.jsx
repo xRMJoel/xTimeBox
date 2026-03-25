@@ -1434,7 +1434,7 @@ function MonthlyProjectReport({ user }) {
 
     supabase
       .from('timesheet_entries')
-      .select('id, entry_date, week_ending, time_value, category, reference, day_name, notes, status, profiles!user_id(full_name), projects(name, client)')
+      .select('id, entry_date, week_ending, time_value, category, feature_tag, day_name, notes, status, profiles!user_id(full_name), projects(name, client)')
       .eq('project_id', selectedProject)
       .gte('entry_date', from)
       .lte('entry_date', to)
@@ -1471,15 +1471,22 @@ function MonthlyProjectReport({ user }) {
 
   const grandTotal = weekData.reduce((s, w) => s + w.total, 0)
 
-  // Aggregate by reference (monthly totals only)
+  // Aggregate by feature_tag / reference (monthly totals only)
   const referenceData = useMemo(() => {
     const refMap = {}
     for (const e of entries) {
-      const ref = e.reference || 'No reference'
-      if (!refMap[ref]) refMap[ref] = { reference: ref, total: 0, category: e.category || 'Other' }
+      const ref = (e.feature_tag && e.feature_tag.trim()) ? e.feature_tag.trim() : 'Other'
+      if (!refMap[ref]) refMap[ref] = { reference: ref, total: 0, categories: {} }
       refMap[ref].total += Number(e.time_value || 0)
+      const cat = e.category || 'Other'
+      refMap[ref].categories[cat] = (refMap[ref].categories[cat] || 0) + Number(e.time_value || 0)
     }
-    return Object.values(refMap).sort((a, b) => a.reference.localeCompare(b.reference))
+    // Sort with "Other" last, then alphabetically
+    return Object.values(refMap).sort((a, b) => {
+      if (a.reference === 'Other') return 1
+      if (b.reference === 'Other') return -1
+      return a.reference.localeCompare(b.reference)
+    })
   }, [entries])
 
   // Summary stats
@@ -1670,22 +1677,36 @@ function MonthlyProjectReport({ user }) {
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--glass-border-subtle)' }}>
                       <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-outline">Reference</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-outline">Category</th>
-                      <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-primary">Days</th>
+                      {allCategories.map((cat) => (
+                        <th key={cat} className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-outline">{cat}</th>
+                      ))}
+                      <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-primary">Total</th>
                     </tr>
                   </thead>
                   <tbody>
                     {referenceData.map((ref) => (
                       <tr key={ref.reference} className="border-t border-[var(--glass-border-subtle)] hover:bg-[var(--white-alpha-2)] transition-colors">
                         <td className="px-4 py-3 font-medium text-on-surface">{ref.reference}</td>
-                        <td className="px-4 py-3 text-on-surface-variant">{ref.category}</td>
+                        {allCategories.map((cat) => (
+                          <td key={cat} className="text-right px-4 py-3 tabular-nums text-on-surface-variant">
+                            {ref.categories[cat] ? ref.categories[cat].toFixed(1) + 'd' : '-'}
+                          </td>
+                        ))}
                         <td className="text-right px-4 py-3 font-bold text-primary tabular-nums">{ref.total.toFixed(1)}d</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr style={{ background: 'rgba(0,201,255,0.04)', borderTop: '2px solid var(--glass-border)' }}>
-                      <td className="px-4 py-3 font-bold text-on-surface" colSpan={2}>Total</td>
+                      <td className="px-4 py-3 font-bold text-on-surface">Total</td>
+                      {allCategories.map((cat) => {
+                        const catTotal = referenceData.reduce((s, r) => s + (r.categories[cat] || 0), 0)
+                        return (
+                          <td key={cat} className="text-right px-4 py-3 font-bold tabular-nums text-on-surface-variant">
+                            {catTotal > 0 ? catTotal.toFixed(1) + 'd' : '-'}
+                          </td>
+                        )
+                      })}
                       <td className="text-right px-4 py-3 font-black text-primary tabular-nums">{grandTotal.toFixed(1)}d</td>
                     </tr>
                   </tfoot>
