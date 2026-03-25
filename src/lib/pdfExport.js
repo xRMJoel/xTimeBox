@@ -1,6 +1,5 @@
-// Dynamic CDN loading for jsPDF + autoTable + custom fonts
+// Dynamic CDN loading for jsPDF + autoTable
 let jsPDFRef = null
-let fontsRegistered = false
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -42,63 +41,6 @@ async function ensureJsPDF() {
   throw new Error('Could not load PDF library from any CDN. Check your internet connection.')
 }
 
-/** Fetch a font file and return its base64 string */
-async function fetchFontBase64(url) {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`Font fetch failed: ${url}`)
-  const buf = await res.arrayBuffer()
-  const bytes = new Uint8Array(buf)
-  let binary = ''
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
-  return btoa(binary)
-}
-
-/**
- * Register Montserrat and Nunito Sans with a jsPDF doc instance.
- * Uses Google Fonts static TTF URLs. Fonts are cached after first load.
- */
-const fontCache = {}
-async function registerFonts(doc) {
-  // Local TTF files served from public/fonts/ (run scripts/download-pdf-fonts.mjs first)
-  // Falls back to CDN sources if local files aren't available
-  const fonts = [
-    { name: 'Montserrat', style: 'bold', file: 'Montserrat-Bold.ttf' },
-    { name: 'Montserrat', style: 'normal', file: 'Montserrat-Regular.ttf' },
-    { name: 'NunitoSans', style: 'bold', file: 'NunitoSans-Bold.ttf' },
-    { name: 'NunitoSans', style: 'normal', file: 'NunitoSans-Regular.ttf' },
-  ]
-
-  for (const f of fonts) {
-    const cacheKey = `${f.name}-${f.style}`
-    if (fontCache[cacheKey]) {
-      doc.addFileToVFS(`${cacheKey}.ttf`, fontCache[cacheKey])
-      doc.addFont(`${cacheKey}.ttf`, f.name, f.style)
-      continue
-    }
-
-    // Try local first, then CDN fallbacks
-    const urls = [
-      `/fonts/${f.file}`,
-      `https://cdn.jsdelivr.net/gh/JulietaUla/Montserrat@master/fonts/ttf/${f.file}`,
-    ]
-
-    let loaded = false
-    for (const url of urls) {
-      try {
-        const b64 = await fetchFontBase64(url)
-        fontCache[cacheKey] = b64
-        doc.addFileToVFS(`${cacheKey}.ttf`, b64)
-        doc.addFont(`${cacheKey}.ttf`, f.name, f.style)
-        loaded = true
-        break
-      } catch (e) {
-        // silently try next
-      }
-    }
-    if (!loaded) console.warn(`Could not load font ${cacheKey} - run: node scripts/download-pdf-fonts.mjs`)
-  }
-}
-
 /** Format a date string like "Fri, 6 Mar 2026" */
 function fmtDate(dateStr) {
   const d = new Date(dateStr + 'T12:00:00')
@@ -113,20 +55,11 @@ function paintPageBg(doc) {
   doc.rect(0, 0, w, h, 'F')
 }
 
-/** Try to use a custom font, fall back to helvetica */
-function useFont(doc, name, style) {
-  try {
-    doc.setFont(name, style)
-  } catch {
-    doc.setFont('helvetica', style === 'bold' ? 'bold' : 'normal')
-  }
-}
-
-/** Shared autoTable config */
+/** Shared autoTable config — uses built-in helvetica */
 function tableDefaults(headerBg, primary, allCategories) {
   return {
     theme: 'plain',
-    styles: { fontSize: 8, font: 'NunitoSans', cellPadding: { top: 3, right: 4, bottom: 3, left: 4 }, textColor: [203, 213, 225], fillColor: [15, 23, 42] },
+    styles: { fontSize: 8, font: 'helvetica', cellPadding: { top: 3, right: 4, bottom: 3, left: 4 }, textColor: [203, 213, 225], fillColor: [15, 23, 42] },
     headStyles: { fillColor: headerBg, textColor: [148, 163, 184], fontStyle: 'bold', fontSize: 7 },
     footStyles: { fillColor: headerBg, textColor: primary, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [22, 33, 55] },
@@ -152,9 +85,6 @@ export async function exportMonthlyProjectPDF({
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
 
-  // Register custom fonts
-  await registerFonts(doc)
-
   const primary = [0, 201, 255]
   const mid = [100, 116, 139]
   const headerBg = [30, 41, 59]
@@ -167,11 +97,11 @@ export async function exportMonthlyProjectPDF({
   // ── Title bar ──
   doc.setFillColor(...headerBg)
   doc.roundedRect(14, 8, pageW - 28, 22, 3, 3, 'F')
-  useFont(doc, 'Montserrat', 'bold')
+  doc.setFont('helvetica', 'bold')
   doc.setFontSize(14)
   doc.setTextColor(255, 255, 255)
   doc.text('Monthly Project Report', 20, 18)
-  useFont(doc, 'NunitoSans', 'normal')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(...primary)
   doc.text(`${projectName}  |  ${client}  |  ${monthLabel}`, 20, 25)
@@ -195,11 +125,10 @@ export async function exportMonthlyProjectPDF({
       doc.setLineWidth(0.4)
       doc.roundedRect(x, y, boxW, 16, 2, 2, 'S')
     }
-    useFont(doc, 'NunitoSans', 'bold')
+    doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
     doc.setTextColor(...mid)
     doc.text(item.label.toUpperCase(), x + 4, y + 5.5)
-    useFont(doc, 'Montserrat', 'bold')
     doc.setFontSize(item.highlight ? 13 : 11)
     doc.setTextColor(item.highlight ? 0 : 255, item.highlight ? 201 : 255, 255)
     doc.text(item.value, x + 4, y + 12.5)
@@ -207,7 +136,7 @@ export async function exportMonthlyProjectPDF({
   y += 24
 
   // ── Days by Category ──
-  useFont(doc, 'Montserrat', 'bold')
+  doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...mid)
   doc.text('DAYS BY CATEGORY', 14, y)
@@ -245,7 +174,7 @@ export async function exportMonthlyProjectPDF({
       y = 14
     }
 
-    useFont(doc, 'Montserrat', 'bold')
+    doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
     doc.setTextColor(...mid)
     doc.text('DAYS BY REFERENCE', 14, y)
@@ -280,7 +209,7 @@ export async function exportMonthlyProjectPDF({
     doc.setPage(i)
     if (i > 1) paintPageBg(doc)
     const ph = doc.internal.pageSize.getHeight()
-    useFont(doc, 'NunitoSans', 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(7)
     doc.setTextColor(...mid)
     doc.text(`xTimeBox  |  Generated ${new Date().toLocaleDateString('en-GB')}`, 14, ph - 6)
