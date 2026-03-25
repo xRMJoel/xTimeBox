@@ -59,25 +59,48 @@ async function fetchFontBase64(url) {
  */
 const fontCache = {}
 async function registerFonts(doc) {
-  // Google Fonts static TTF URLs
+  // Static TTF files (not variable fonts) so jsPDF can render bold/normal correctly
+  // Montserrat from the official GitHub repo, Nunito Sans from Google Fonts static serving
   const fonts = [
-    { name: 'Montserrat', style: 'bold', url: 'https://fonts.gstatic.com/s/montserrat/v29/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCuM70w-Y3tcoqK5.ttf' },
-    { name: 'Montserrat', style: 'normal', url: 'https://fonts.gstatic.com/s/montserrat/v29/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCu170w-Y3tcoqK5.ttf' },
-    { name: 'NunitoSans', style: 'bold', url: 'https://fonts.gstatic.com/s/nunitosans/v15/pe0TMImSLYBIv1o4X1M8ce2xCx3yop4tQpF_MeTm0lfGWVpNn64CL7U8upHZIbMV51Q42ptCp7t1R-s.ttf' },
-    { name: 'NunitoSans', style: 'normal', url: 'https://fonts.gstatic.com/s/nunitosans/v15/pe0TMImSLYBIv1o4X1M8ce2xCx3yop4tQpF_MeTm0lfGWVpNn64CL7U8upHZIbMV51Q42ptCp5t9R-s.ttf' },
+    { name: 'Montserrat', style: 'bold', urls: [
+      'https://cdn.jsdelivr.net/gh/JulietaUla/Montserrat@master/fonts/ttf/Montserrat-Bold.ttf',
+      'https://raw.githubusercontent.com/JulietaUla/Montserrat/master/fonts/ttf/Montserrat-Bold.ttf',
+    ]},
+    { name: 'Montserrat', style: 'normal', urls: [
+      'https://cdn.jsdelivr.net/gh/JulietaUla/Montserrat@master/fonts/ttf/Montserrat-Regular.ttf',
+      'https://raw.githubusercontent.com/JulietaUla/Montserrat/master/fonts/ttf/Montserrat-Regular.ttf',
+    ]},
+    { name: 'NunitoSans', style: 'bold', urls: [
+      'https://cdn.jsdelivr.net/gh/googlefonts/nunitosans@v3.001/NunitoSans-Bold.ttf',
+      'https://raw.githubusercontent.com/googlefonts/nunitosans/v3.001/NunitoSans-Bold.ttf',
+    ]},
+    { name: 'NunitoSans', style: 'normal', urls: [
+      'https://cdn.jsdelivr.net/gh/googlefonts/nunitosans@v3.001/NunitoSans-Regular.ttf',
+      'https://raw.githubusercontent.com/googlefonts/nunitosans/v3.001/NunitoSans-Regular.ttf',
+    ]},
   ]
 
   for (const f of fonts) {
     const cacheKey = `${f.name}-${f.style}`
-    try {
-      if (!fontCache[cacheKey]) {
-        fontCache[cacheKey] = await fetchFontBase64(f.url)
-      }
+    if (fontCache[cacheKey]) {
       doc.addFileToVFS(`${cacheKey}.ttf`, fontCache[cacheKey])
       doc.addFont(`${cacheKey}.ttf`, f.name, f.style)
-    } catch (e) {
-      console.warn(`Could not load font ${cacheKey}, falling back to helvetica:`, e.message)
+      continue
     }
+    let loaded = false
+    for (const url of f.urls) {
+      try {
+        const b64 = await fetchFontBase64(url)
+        fontCache[cacheKey] = b64
+        doc.addFileToVFS(`${cacheKey}.ttf`, b64)
+        doc.addFont(`${cacheKey}.ttf`, f.name, f.style)
+        loaded = true
+        break
+      } catch (e) {
+        console.warn(`Font URL failed for ${cacheKey}:`, url, e.message)
+      }
+    }
+    if (!loaded) console.warn(`Could not load ${cacheKey}, will fall back to helvetica`)
   }
 }
 
