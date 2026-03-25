@@ -1,10 +1,11 @@
-// Dynamic CDN loading for jsPDF + autoTable
-let jsPDFRef = null
+// PDF export using html2canvas for real font rendering + jsPDF for PDF generation
+
+let libsLoaded = null
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[src="${src}"]`)
-    if (existing) { existing.remove() }
+    if (existing) { resolve(); return }
     const s = document.createElement('script')
     s.src = src
     s.onload = resolve
@@ -13,32 +14,26 @@ function loadScript(src) {
   })
 }
 
-async function ensureJsPDF() {
-  if (jsPDFRef) return jsPDFRef
-  const cdns = [
-    {
-      jspdf: 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
-      autotable: 'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',
-    },
-    {
-      jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
-      autotable: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
-    },
-    {
-      jspdf: 'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js',
-      autotable: 'https://unpkg.com/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',
-    },
-  ]
-  for (const cdn of cdns) {
-    try {
-      await loadScript(cdn.jspdf)
-      await loadScript(cdn.autotable)
-      if (window.jspdf) { jsPDFRef = window.jspdf; return jsPDFRef }
-    } catch (e) {
-      console.warn('CDN failed, trying next:', e.message)
+async function ensureLibs() {
+  if (libsLoaded) return libsLoaded
+  libsLoaded = (async () => {
+    const cdns = [
+      { jspdf: 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js', h2c: 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js' },
+      { jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', h2c: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js' },
+      { jspdf: 'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js', h2c: 'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js' },
+    ]
+    for (const cdn of cdns) {
+      try {
+        await loadScript(cdn.jspdf)
+        await loadScript(cdn.h2c)
+        if (window.jspdf && window.html2canvas) return { jsPDF: window.jspdf.jsPDF, html2canvas: window.html2canvas }
+      } catch (e) {
+        console.warn('CDN failed, trying next:', e.message)
+      }
     }
-  }
-  throw new Error('Could not load PDF library from any CDN. Check your internet connection.')
+    throw new Error('Could not load PDF libraries. Check your internet connection.')
+  })()
+  return libsLoaded
 }
 
 /** Format a date string like "Fri, 6 Mar 2026" */
@@ -47,175 +42,198 @@ function fmtDate(dateStr) {
   return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-/** Paint the full page background dark */
-function paintPageBg(doc) {
-  const w = doc.internal.pageSize.getWidth()
-  const h = doc.internal.pageSize.getHeight()
-  doc.setFillColor(15, 23, 42)
-  doc.rect(0, 0, w, h, 'F')
-}
-
-/** Shared autoTable config — uses built-in helvetica */
-function tableDefaults(headerBg, primary, allCategories) {
-  return {
-    theme: 'plain',
-    styles: { fontSize: 8, font: 'helvetica', cellPadding: { top: 3, right: 4, bottom: 3, left: 4 }, textColor: [203, 213, 225], fillColor: [15, 23, 42] },
-    headStyles: { fillColor: headerBg, textColor: [148, 163, 184], fontStyle: 'bold', fontSize: 7 },
-    footStyles: { fillColor: headerBg, textColor: primary, fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [22, 33, 55] },
-    columnStyles: {
-      0: { halign: 'left', fontStyle: 'bold', textColor: [226, 232, 240] },
-      [allCategories.length + 1]: { textColor: primary, fontStyle: 'bold' },
-    },
-    didParseCell: (data) => {
-      if (data.column.index > 0) data.cell.styles.halign = 'right'
-    },
-    margin: { left: 14, right: 14 },
-  }
-}
-
-/**
- * Export the Monthly Project Report as a styled PDF.
- */
-export async function exportMonthlyProjectPDF({
+/** Build the HTML string for the report (light theme, real fonts) */
+function buildReportHTML({
   projectName, client, monthLabel, grandTotal, totalWeeks, totalEntries,
   weekData, allCategories, referenceData,
 }) {
-  const { jsPDF } = await ensureJsPDF()
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-  const pageW = doc.internal.pageSize.getWidth()
+  const primary = '#0891b2'   // cyan-600
+  const accent = '#06b6d4'    // cyan-500
+  const dark = '#0f172a'      // slate-900
+  const mid = '#64748b'       // slate-500
+  const light = '#f1f5f9'     // slate-100
+  const border = '#e2e8f0'    // slate-200
+  const headerBg = '#0f172a'
 
-  const primary = [0, 201, 255]
-  const mid = [100, 116, 139]
-  const headerBg = [30, 41, 59]
-  const accent = [0, 160, 210]
+  const th = `style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif"`
+  const thLeft = `style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif"`
+  const td = `style="padding:8px 12px;text-align:right;font-size:12px;color:${dark};font-family:'Nunito Sans',sans-serif"`
+  const tdLeft = `style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:${dark};font-family:'Nunito Sans',sans-serif"`
+  const tdTotal = `style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:${primary};font-family:'Nunito Sans',sans-serif"`
+  const tfLeft = `style="padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:${primary};font-family:'Montserrat',sans-serif"`
+  const tf = `style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:${primary};font-family:'Nunito Sans',sans-serif"`
 
-  paintPageBg(doc)
+  // Category table rows
+  const catRows = weekData.map((w, i) => {
+    const bg = i % 2 === 0 ? '#ffffff' : light
+    const cells = allCategories.map(c =>
+      `<td ${td}>${w.categories[c] ? w.categories[c].toFixed(1) : '-'}</td>`
+    ).join('')
+    return `<tr style="background:${bg}"><td ${tdLeft}>${fmtDate(w.weekEnding)}</td>${cells}<td ${tdTotal}>${w.total.toFixed(1)}</td></tr>`
+  }).join('')
 
-  let y = 15
+  const catFootCells = allCategories.map(c => {
+    const t = weekData.reduce((s, w) => s + (w.categories[c] || 0), 0)
+    return `<td ${tf}>${t > 0 ? t.toFixed(1) : '-'}</td>`
+  }).join('')
 
-  // ── Title bar ──
-  doc.setFillColor(...headerBg)
-  doc.roundedRect(14, 8, pageW - 28, 22, 3, 3, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(14)
-  doc.setTextColor(255, 255, 255)
-  doc.text('Monthly Project Report', 20, 18)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...primary)
-  doc.text(`${projectName}  |  ${client}  |  ${monthLabel}`, 20, 25)
-  y = 38
+  // Reference table rows
+  const refRows = referenceData.map((r, i) => {
+    const bg = i % 2 === 0 ? '#ffffff' : light
+    const cells = allCategories.map(c =>
+      `<td ${td}>${r.categories[c] ? r.categories[c].toFixed(1) : '-'}</td>`
+    ).join('')
+    return `<tr style="background:${bg}"><td ${tdLeft}>${r.reference}</td>${cells}<td ${tdTotal}>${r.total.toFixed(1)}</td></tr>`
+  }).join('')
 
-  // ── Summary cards ──
-  const summaryItems = [
-    { label: 'Total Days', value: grandTotal.toFixed(1), highlight: true },
-    { label: 'Weeks', value: String(totalWeeks) },
-    { label: 'Entries', value: String(totalEntries) },
-    { label: 'Client', value: client || '-' },
-  ]
-  const cardGap = 4
-  const boxW = (pageW - 28 - cardGap * 3) / 4
-  summaryItems.forEach((item, i) => {
-    const x = 14 + i * (boxW + cardGap)
-    doc.setFillColor(...headerBg)
-    doc.roundedRect(x, y, boxW, 16, 2, 2, 'F')
-    if (item.highlight) {
-      doc.setDrawColor(...accent)
-      doc.setLineWidth(0.4)
-      doc.roundedRect(x, y, boxW, 16, 2, 2, 'S')
-    }
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6.5)
-    doc.setTextColor(...mid)
-    doc.text(item.label.toUpperCase(), x + 4, y + 5.5)
-    doc.setFontSize(item.highlight ? 13 : 11)
-    doc.setTextColor(item.highlight ? 0 : 255, item.highlight ? 201 : 255, 255)
-    doc.text(item.value, x + 4, y + 12.5)
-  })
-  y += 24
+  const refFootCells = allCategories.map(c => {
+    const t = referenceData.reduce((s, r) => s + (r.categories[c] || 0), 0)
+    return `<td ${tf}>${t > 0 ? t.toFixed(1) : '-'}</td>`
+  }).join('')
 
-  // ── Days by Category ──
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(...mid)
-  doc.text('DAYS BY CATEGORY', 14, y)
-  y += 2
+  return `
+<div style="width:1120px;padding:24px 32px;background:#ffffff;font-family:'Nunito Sans',system-ui,sans-serif;color:${dark}">
+  <!-- Title -->
+  <div style="background:${headerBg};border-radius:8px;padding:16px 24px;margin-bottom:20px">
+    <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:22px;color:#ffffff">Monthly Project Report</div>
+    <div style="font-family:'Nunito Sans',sans-serif;font-size:13px;color:${accent};margin-top:4px">${projectName}  |  ${client}  |  ${monthLabel}</div>
+  </div>
 
-  const catBody = weekData.map((w) => [
-    fmtDate(w.weekEnding),
-    ...allCategories.map((c) => w.categories[c] ? w.categories[c].toFixed(1) : '-'),
-    w.total.toFixed(1),
-  ])
-  const catFoot = [[
-    'Monthly Total',
-    ...allCategories.map((c) => {
-      const t = weekData.reduce((s, w) => s + (w.categories[c] || 0), 0)
-      return t > 0 ? t.toFixed(1) : '-'
-    }),
-    grandTotal.toFixed(1),
-  ]]
+  <!-- Summary cards -->
+  <div style="display:flex;gap:12px;margin-bottom:20px">
+    <div style="flex:1;background:${light};border:2px solid ${accent};border-radius:8px;padding:10px 16px">
+      <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${mid};font-family:'Nunito Sans',sans-serif">Total Days</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:24px;color:${primary}">${grandTotal.toFixed(1)}</div>
+    </div>
+    <div style="flex:1;background:${light};border-radius:8px;padding:10px 16px">
+      <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${mid};font-family:'Nunito Sans',sans-serif">Weeks</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:24px;color:${dark}">${totalWeeks}</div>
+    </div>
+    <div style="flex:1;background:${light};border-radius:8px;padding:10px 16px">
+      <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${mid};font-family:'Nunito Sans',sans-serif">Entries</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:24px;color:${dark}">${totalEntries}</div>
+    </div>
+    <div style="flex:1;background:${light};border-radius:8px;padding:10px 16px">
+      <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${mid};font-family:'Nunito Sans',sans-serif">Client</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:16px;color:${dark};margin-top:4px">${client || '-'}</div>
+    </div>
+  </div>
 
-  doc.autoTable({
-    startY: y,
-    head: [['Week Ending', ...allCategories, 'Total']],
-    body: catBody,
-    foot: catFoot,
-    ...tableDefaults(headerBg, primary, allCategories),
-  })
+  <!-- Days by Category -->
+  <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.15em;color:${mid};margin-bottom:6px">Days by Category</div>
+  <table style="width:100%;border-collapse:collapse;border:1px solid ${border};border-radius:6px;overflow:hidden;margin-bottom:20px">
+    <thead>
+      <tr style="background:${headerBg}">
+        <th ${thLeft}>Week Ending</th>
+        ${allCategories.map(c => `<th ${th}>${c}</th>`).join('')}
+        <th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif">Total</th>
+      </tr>
+    </thead>
+    <tbody>${catRows}</tbody>
+    <tfoot>
+      <tr style="background:${light};border-top:2px solid ${border}">
+        <td ${tfLeft}>Monthly Total</td>
+        ${catFootCells}
+        <td ${tf}>${grandTotal.toFixed(1)}</td>
+      </tr>
+    </tfoot>
+  </table>
 
-  y = doc.lastAutoTable.finalY + 8
+  <!-- Days by Reference -->
+  ${referenceData.length > 0 ? `
+  <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.15em;color:${mid};margin-bottom:6px">Days by Reference</div>
+  <table style="width:100%;border-collapse:collapse;border:1px solid ${border};border-radius:6px;overflow:hidden;margin-bottom:20px">
+    <thead>
+      <tr style="background:${headerBg}">
+        <th ${thLeft}>Reference</th>
+        ${allCategories.map(c => `<th ${th}>${c}</th>`).join('')}
+        <th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif">Total</th>
+      </tr>
+    </thead>
+    <tbody>${refRows}</tbody>
+    <tfoot>
+      <tr style="background:${light};border-top:2px solid ${border}">
+        <td ${tfLeft}>Total</td>
+        ${refFootCells}
+        <td ${tf}>${grandTotal.toFixed(1)}</td>
+      </tr>
+    </tfoot>
+  </table>
+  ` : ''}
 
-  // ── Days by Reference ──
-  if (referenceData.length > 0) {
-    if (y > doc.internal.pageSize.getHeight() - 40) {
-      doc.addPage()
-      paintPageBg(doc)
-      y = 14
-    }
+  <!-- Footer -->
+  <div style="display:flex;justify-content:space-between;font-size:10px;color:${mid};font-family:'Nunito Sans',sans-serif;padding-top:8px;border-top:1px solid ${border}">
+    <span>xTimeBox  |  Generated ${new Date().toLocaleDateString('en-GB')}</span>
+    <span>${projectName} - ${monthLabel}</span>
+  </div>
+</div>`
+}
 
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(...mid)
-    doc.text('DAYS BY REFERENCE', 14, y)
-    y += 2
+/**
+ * Export the Monthly Project Report as a PDF using html2canvas for real font rendering.
+ */
+export async function exportMonthlyProjectPDF(data) {
+  const { jsPDF, html2canvas } = await ensureLibs()
 
-    const refBody = referenceData.map((r) => [
-      r.reference,
-      ...allCategories.map((c) => r.categories[c] ? r.categories[c].toFixed(1) : '-'),
-      r.total.toFixed(1),
-    ])
-    const refFoot = [[
-      'Total',
-      ...allCategories.map((c) => {
-        const t = referenceData.reduce((s, r) => s + (r.categories[c] || 0), 0)
-        return t > 0 ? t.toFixed(1) : '-'
-      }),
-      grandTotal.toFixed(1),
-    ]]
+  // Create a temporary off-screen container with the styled HTML
+  const container = document.createElement('div')
+  container.style.position = 'fixed'
+  container.style.left = '-9999px'
+  container.style.top = '0'
+  container.innerHTML = buildReportHTML(data)
+  document.body.appendChild(container)
 
-    doc.autoTable({
-      startY: y,
-      head: [['Reference', ...allCategories, 'Total']],
-      body: refBody,
-      foot: refFoot,
-      ...tableDefaults(headerBg, primary, allCategories),
+  // Wait a tick for fonts to apply to the new DOM elements
+  await new Promise(r => setTimeout(r, 100))
+
+  try {
+    const canvas = await html2canvas(container.firstElementChild, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
     })
-  }
 
-  // ── Footer on every page ──
-  const pageCount = doc.internal.getNumberOfPages()
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i)
-    if (i > 1) paintPageBg(doc)
-    const ph = doc.internal.pageSize.getHeight()
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.setTextColor(...mid)
-    doc.text(`xTimeBox  |  Generated ${new Date().toLocaleDateString('en-GB')}`, 14, ph - 6)
-    doc.text(`Page ${i} of ${pageCount}`, pageW - 14, ph - 6, { align: 'right' })
-  }
+    // A4 landscape dimensions in mm
+    const pageW = 297
+    const pageH = 210
+    const margin = 8
+    const contentW = pageW - margin * 2
+    const contentH = pageH - margin * 2
 
-  const filename = `${projectName.replace(/[^a-zA-Z0-9]/g, '-')}_${monthLabel.replace(' ', '-')}.pdf`
-  doc.save(filename)
+    // Calculate how the canvas fits on pages
+    const imgW = contentW
+    const imgH = (canvas.height / canvas.width) * imgW
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+
+    if (imgH <= contentH) {
+      // Fits on one page
+      doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, imgW, imgH)
+    } else {
+      // Multi-page: slice the canvas
+      const pageCanvasHeight = (contentH / imgH) * canvas.height
+      let srcY = 0
+      let page = 0
+
+      while (srcY < canvas.height) {
+        if (page > 0) doc.addPage()
+        const sliceH = Math.min(pageCanvasHeight, canvas.height - srcY)
+        const sliceCanvas = document.createElement('canvas')
+        sliceCanvas.width = canvas.width
+        sliceCanvas.height = sliceH
+        const ctx = sliceCanvas.getContext('2d')
+        ctx.drawImage(canvas, 0, srcY, canvas.width, sliceH, 0, 0, canvas.width, sliceH)
+        const destH = (sliceH / canvas.width) * imgW
+        doc.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, imgW, destH)
+        srcY += pageCanvasHeight
+        page++
+      }
+    }
+
+    const { projectName, monthLabel } = data
+    const filename = `${projectName.replace(/[^a-zA-Z0-9]/g, '-')}_${monthLabel.replace(' ', '-')}.pdf`
+    doc.save(filename)
+  } finally {
+    document.body.removeChild(container)
+  }
 }
