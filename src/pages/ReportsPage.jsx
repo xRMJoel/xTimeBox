@@ -1392,7 +1392,7 @@ function MonthlyProjectReport({ user }) {
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(false)
   const [projectsLoading, setProjectsLoading] = useState(true)
-  const [includeStatuses, setIncludeStatuses] = useState({ signed_off: true, submitted: true, draft: false })
+  const [includeStatuses, setIncludeStatuses] = useState({ signed_off: true, submitted: true, draft: true })
 
   function toggleStatus(status) {
     setIncludeStatuses((prev) => ({ ...prev, [status]: !prev[status] }))
