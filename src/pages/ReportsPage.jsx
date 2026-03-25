@@ -16,6 +16,7 @@ export default function ReportsPage() {
     const personal = [
       { id: 'my-time-summary', title: 'My Time Summary', description: 'Totals by week or month, broken down by project, client, or category.', icon: 'bar_chart', colour: 'cyan' },
       { id: 'my-submission-tracker', title: 'My Submission Tracker', description: 'Which weeks are complete, have gaps, or are still in draft.', icon: 'checklist', colour: 'purple' },
+      { id: 'monthly-project-report', title: 'Monthly Project Report', description: 'Time logged per project by week and category with monthly totals.', icon: 'summarize', colour: 'green' },
     ]
     const team = isManager ? [
       { id: 'team-submission-status', title: 'Team Submission Status', description: 'Who has submitted, who is in draft, who hasn\'t started.', icon: 'group', colour: 'cyan' },
@@ -129,6 +130,7 @@ function ReportView({ reportId, user, isManager }) {
   switch (reportId) {
     case 'my-time-summary':       return <MyTimeSummary user={user} />
     case 'my-submission-tracker': return <MySubmissionTracker user={user} />
+    case 'monthly-project-report': return <MonthlyProjectReport user={user} />
     case 'team-submission-status': return isManager ? <TeamSubmissionStatus /> : null
     case 'returned-entries':       return isManager ? <ReturnedEntries /> : null
     case 'project-time-report':    return isManager ? <ProjectTimeReport /> : null
@@ -1369,6 +1371,232 @@ function CategoryBreakdown() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────
+// Monthly Project Report
+// ────────────────────────────────────────────────────────
+function MonthlyProjectReport({ user }) {
+  const [monthStart, setMonthStart] = useState(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [projects, setProjects] = useState([])
+  const [selectedProject, setSelectedProject] = useState('')
+  const [entries, setEntries] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [projectsLoading, setProjectsLoading] = useState(true)
+
+  // Load projects the user is assigned to
+  useEffect(() => {
+    if (!user?.id) return
+    setProjectsLoading(true)
+    supabase
+      .from('user_projects')
+      .select('project_id, projects(id, name, client, status)')
+      .eq('user_id', user.id)
+      .then(({ data }) => {
+        const active = (data || [])
+          .map((up) => up.projects)
+          .filter((p) => p && p.status === 'active')
+          .sort((a, b) => a.name.localeCompare(b.name))
+        setProjects(active)
+        if (active.length === 1) setSelectedProject(active[0].id)
+        setProjectsLoading(false)
+      })
+  }, [user?.id])
+
+  // Load entries when project or month changes
+  useEffect(() => {
+    if (!selectedProject || !monthStart) return
+    setLoading(true)
+
+    const d = new Date(monthStart + '-01T12:00:00')
+    const from = d.toISOString().slice(0, 10)
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+    const to = last.toISOString().slice(0, 10)
+
+    supabase
+      .from('timesheet_entries')
+      .select('id, entry_date, week_ending, time_value, category, day_name, notes, status, profiles(full_name), projects(name, client)')
+      .eq('project_id', selectedProject)
+      .gte('entry_date', from)
+      .lte('entry_date', to)
+      .in('status', ['draft', 'submitted', 'signed_off'])
+      .order('entry_date')
+      .then(({ data }) => { setEntries(data || []); setLoading(false) })
+  }, [selectedProject, monthStart])
+
+  // Group entries by week_ending, then aggregate categories
+  const weekData = useMemo(() => {
+    const weekMap = {}
+    for (const e of entries) {
+      const we = e.week_ending
+      if (!weekMap[we]) weekMap[we] = { weekEnding: we, categories: {}, total: 0 }
+      const cat = e.category || 'Other'
+      weekMap[we].categories[cat] = (weekMap[we].categories[cat] || 0) + Number(e.time_value || 0)
+      weekMap[we].total += Number(e.time_value || 0)
+    }
+    return Object.values(weekMap).sort((a, b) => a.weekEnding.localeCompare(b.weekEnding))
+  }, [entries])
+
+  // All categories used across all weeks (for consistent columns)
+  const allCategories = useMemo(() => {
+    const cats = new Set()
+    for (const w of weekData) {
+      for (const cat of Object.keys(w.categories)) cats.add(cat)
+    }
+    return [...cats].sort()
+  }, [weekData])
+
+  const grandTotal = weekData.reduce((s, w) => s + w.total, 0)
+
+  const selectedProjectObj = projects.find((p) => p.id === selectedProject)
+  const monthLabel = new Date(monthStart + '-01T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+
+  function shiftMonth(dir) {
+    const d = new Date(monthStart + '-01T12:00:00')
+    d.setMonth(d.getMonth() + dir)
+    setMonthStart(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="font-heading font-bold text-2xl text-on-surface">Monthly Project Report</h2>
+        <p className="text-sm text-on-surface-variant mt-1">Time logged against a project for a given month, broken down by week and category.</p>
+      </div>
+
+      {/* Controls */}
+      <div className="flex flex-wrap items-end gap-4">
+        {/* Project selector */}
+        <div>
+          <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Project</label>
+          {projectsLoading ? (
+            <div className="text-sm text-on-surface-variant">Loading projects...</div>
+          ) : (
+            <select
+              value={selectedProject}
+              onChange={(e) => setSelectedProject(e.target.value)}
+              className="bg-surface-container-highest/50 rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none min-w-[220px]"
+              style={{ background: 'var(--color-surface-variant)', border: '1px solid var(--glass-border)' }}
+            >
+              <option value="">Select a project</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name} ({p.client})</option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {/* Month picker */}
+        <div>
+          <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Month</label>
+          <div className="flex items-center gap-2">
+            <button onClick={() => shiftMonth(-1)} className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all">
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>chevron_left</span>
+            </button>
+            <span className="text-sm font-medium text-on-surface min-w-[130px] text-center">{monthLabel}</span>
+            <button onClick={() => shiftMonth(1)} className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all">
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>chevron_right</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Report body */}
+      {!selectedProject ? (
+        <div className="glass-card rounded-xl p-8 text-center">
+          <span className="material-symbols-outlined text-on-surface-variant/30" style={{ fontSize: '48px' }}>folder_open</span>
+          <p className="text-on-surface-variant mt-3">Select a project to generate the report.</p>
+        </div>
+      ) : loading ? (
+        <LoadingSpinner message="Loading project data..." />
+      ) : entries.length === 0 ? (
+        <div className="glass-card rounded-xl p-8 text-center">
+          <span className="material-symbols-outlined text-on-surface-variant/30" style={{ fontSize: '48px' }}>search_off</span>
+          <p className="text-on-surface-variant mt-3">No entries found for {selectedProjectObj?.name} in {monthLabel}.</p>
+        </div>
+      ) : (
+        <>
+          {/* Summary card */}
+          <div className="glass-card rounded-xl p-5" style={{ background: 'rgba(0,201,255,0.06)', border: '1px solid rgba(0,201,255,0.15)' }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-outline mb-1">{selectedProjectObj?.name}</p>
+                <div className="flex items-baseline gap-3">
+                  <span className="text-3xl font-heading font-black text-primary tabular-nums">{grandTotal.toFixed(1)}</span>
+                  <span className="text-sm text-on-surface-variant">total days in {monthLabel}</span>
+                </div>
+              </div>
+              {selectedProjectObj?.client && (
+                <span className="text-sm text-on-surface-variant">{selectedProjectObj.client}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Week-by-week table */}
+          <div className="glass-card rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ background: 'var(--week-header-bg)', borderBottom: '1px solid var(--glass-border-subtle)' }}>
+                    <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-outline">Week ending</th>
+                    {allCategories.map((cat) => (
+                      <th key={cat} className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-outline">{cat}</th>
+                    ))}
+                    <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-primary">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {weekData.map((week) => (
+                    <tr key={week.weekEnding} className="border-t border-[var(--glass-border-subtle)] hover:bg-[var(--white-alpha-2)] transition-colors">
+                      <td className="px-4 py-3 font-medium text-on-surface">{formatDate(week.weekEnding)}</td>
+                      {allCategories.map((cat) => (
+                        <td key={cat} className="text-right px-4 py-3 tabular-nums text-on-surface-variant">
+                          {week.categories[cat] ? week.categories[cat].toFixed(1) + 'd' : '-'}
+                        </td>
+                      ))}
+                      <td className="text-right px-4 py-3 font-bold text-primary tabular-nums">{week.total.toFixed(1)}d</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: 'rgba(0,201,255,0.04)', borderTop: '2px solid var(--glass-border)' }}>
+                    <td className="px-4 py-3 font-bold text-on-surface">Monthly total</td>
+                    {allCategories.map((cat) => {
+                      const catTotal = weekData.reduce((s, w) => s + (w.categories[cat] || 0), 0)
+                      return (
+                        <td key={cat} className="text-right px-4 py-3 font-bold tabular-nums text-on-surface-variant">
+                          {catTotal > 0 ? catTotal.toFixed(1) + 'd' : '-'}
+                        </td>
+                      )
+                    })}
+                    <td className="text-right px-4 py-3 font-black text-primary tabular-nums">{grandTotal.toFixed(1)}d</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          {/* Category summary bar chart */}
+          {allCategories.length > 1 && (
+            <div className="glass-card rounded-xl p-5 space-y-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline">Category breakdown</p>
+              <HorizontalBarChart
+                data={allCategories.map((cat) => ({
+                  label: cat,
+                  value: weekData.reduce((s, w) => s + (w.categories[cat] || 0), 0),
+                })).sort((a, b) => b.value - a.value)}
+                labelKey="label"
+                valueKey="value"
+              />
             </div>
           )}
         </>
