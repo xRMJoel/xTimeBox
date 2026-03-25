@@ -4,7 +4,7 @@ let jsPDFRef = null
 function loadScript(src) {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[src="${src}"]`)
-    if (existing) { existing.remove() } // remove stale tags so we can retry
+    if (existing) { existing.remove() }
     const s = document.createElement('script')
     s.src = src
     s.onload = resolve
@@ -15,8 +15,6 @@ function loadScript(src) {
 
 async function ensureJsPDF() {
   if (jsPDFRef) return jsPDFRef
-
-  // Try multiple CDNs in case one is blocked
   const cdns = [
     {
       jspdf: 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
@@ -31,21 +29,49 @@ async function ensureJsPDF() {
       autotable: 'https://unpkg.com/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',
     },
   ]
-
   for (const cdn of cdns) {
     try {
       await loadScript(cdn.jspdf)
       await loadScript(cdn.autotable)
-      if (window.jspdf) {
-        jsPDFRef = window.jspdf
-        return jsPDFRef
-      }
+      if (window.jspdf) { jsPDFRef = window.jspdf; return jsPDFRef }
     } catch (e) {
       console.warn('CDN failed, trying next:', e.message)
     }
   }
-
   throw new Error('Could not load PDF library from any CDN. Check your internet connection.')
+}
+
+/** Format a date string like "Fri, 6 Mar 2026" */
+function fmtDate(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00')
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/** Paint the full page background dark */
+function paintPageBg(doc) {
+  const w = doc.internal.pageSize.getWidth()
+  const h = doc.internal.pageSize.getHeight()
+  doc.setFillColor(15, 23, 42) // slate-900
+  doc.rect(0, 0, w, h, 'F')
+}
+
+/** Shared autoTable config for dark-themed tables */
+function tableDefaults(headerBg, primary, allCategories) {
+  return {
+    theme: 'plain',
+    styles: { fontSize: 8, cellPadding: { top: 3, right: 4, bottom: 3, left: 4 }, textColor: [203, 213, 225], fillColor: [15, 23, 42] },
+    headStyles: { fillColor: headerBg, textColor: [148, 163, 184], fontStyle: 'bold', fontSize: 7, cellPadding: { top: 3.5, right: 4, bottom: 3.5, left: 4 } },
+    footStyles: { fillColor: headerBg, textColor: primary, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [22, 33, 55] },
+    columnStyles: {
+      0: { halign: 'left', fontStyle: 'bold', textColor: [226, 232, 240] },
+      [allCategories.length + 1]: { textColor: primary, fontStyle: 'bold' },
+    },
+    didParseCell: (data) => {
+      if (data.column.index > 0) data.cell.styles.halign = 'right'
+    },
+    margin: { left: 14, right: 14 },
+  }
 }
 
 /**
@@ -59,60 +85,67 @@ export async function exportMonthlyProjectPDF({
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
 
-  // Colours
-  const primary = [0, 201, 255]      // cyan
-  const mid = [100, 116, 139]        // slate-500
-  const headerBg = [30, 41, 59]      // slate-800
+  const primary = [0, 201, 255]
+  const mid = [100, 116, 139]
+  const headerBg = [30, 41, 59]
+  const accent = [0, 160, 210]
+
+  // Dark page background
+  paintPageBg(doc)
 
   let y = 15
 
   // ── Title bar ──
   doc.setFillColor(...headerBg)
-  doc.rect(0, 0, pageW, 28, 'F')
+  doc.roundedRect(14, 8, pageW - 28, 22, 3, 3, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
+  doc.setFontSize(14)
   doc.setTextColor(255, 255, 255)
-  doc.text('Monthly Project Report', 14, 12)
-  doc.setFontSize(10)
+  doc.text('Monthly Project Report', 20, 18)
+  doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(...primary)
-  doc.text(`${projectName}  ·  ${client}  ·  ${monthLabel}`, 14, 22)
-  y = 36
+  doc.text(`${projectName}  |  ${client}  |  ${monthLabel}`, 20, 25)
+  y = 38
 
-  // ── Summary row ──
+  // ── Summary cards ──
   const summaryItems = [
-    { label: 'Total Days', value: grandTotal.toFixed(1) },
+    { label: 'Total Days', value: grandTotal.toFixed(1), highlight: true },
     { label: 'Weeks', value: String(totalWeeks) },
     { label: 'Entries', value: String(totalEntries) },
     { label: 'Client', value: client || '-' },
   ]
-  const boxW = (pageW - 28 - 12) / 4
-  doc.setFontSize(8)
+  const cardGap = 4
+  const boxW = (pageW - 28 - cardGap * 3) / 4
   summaryItems.forEach((item, i) => {
-    const x = 14 + i * (boxW + 4)
-    doc.setFillColor(30, 41, 59)
+    const x = 14 + i * (boxW + cardGap)
+    doc.setFillColor(...headerBg)
     doc.roundedRect(x, y, boxW, 16, 2, 2, 'F')
+    if (item.highlight) {
+      doc.setDrawColor(...accent)
+      doc.setLineWidth(0.4)
+      doc.roundedRect(x, y, boxW, 16, 2, 2, 'S')
+    }
     doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.5)
     doc.setTextColor(...mid)
-    doc.text(item.label.toUpperCase(), x + 4, y + 5)
+    doc.text(item.label.toUpperCase(), x + 4, y + 5.5)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(12)
-    doc.setTextColor(255, 255, 255)
-    doc.text(item.value, x + 4, y + 12)
-    doc.setFontSize(8)
+    doc.setFontSize(item.highlight ? 13 : 11)
+    doc.setTextColor(item.highlight ? 0 : 255, item.highlight ? 201 : 255, 255)
+    doc.text(item.value, x + 4, y + 12.5)
   })
   y += 24
 
-  // ── Days by Category table ──
+  // ── Days by Category ──
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
+  doc.setFontSize(8)
   doc.setTextColor(...mid)
   doc.text('DAYS BY CATEGORY', 14, y)
-  y += 3
+  y += 2
 
-  const catHead = [['Week Ending', ...allCategories, 'Total']]
   const catBody = weekData.map((w) => [
-    w.weekEnding,
+    fmtDate(w.weekEnding),
     ...allCategories.map((c) => w.categories[c] ? w.categories[c].toFixed(1) : '-'),
     w.total.toFixed(1),
   ])
@@ -127,40 +160,28 @@ export async function exportMonthlyProjectPDF({
 
   doc.autoTable({
     startY: y,
-    head: catHead,
+    head: [['Week Ending', ...allCategories, 'Total']],
     body: catBody,
     foot: catFoot,
-    theme: 'plain',
-    styles: { fontSize: 8, cellPadding: 2.5, textColor: [226, 232, 240] },
-    headStyles: { fillColor: headerBg, textColor: [148, 163, 184], fontStyle: 'bold', fontSize: 7 },
-    footStyles: { fillColor: [20, 30, 48], textColor: primary, fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [20, 27, 45] },
-    columnStyles: {
-      0: { halign: 'left' },
-      [allCategories.length + 1]: { textColor: primary, fontStyle: 'bold' },
-    },
-    didParseCell: (data) => {
-      if (data.column.index > 0) data.cell.styles.halign = 'right'
-    },
-    margin: { left: 14, right: 14 },
+    ...tableDefaults(headerBg, primary, allCategories),
   })
 
-  y = doc.lastAutoTable.finalY + 10
+  y = doc.lastAutoTable.finalY + 8
 
-  // ── Days by Reference table ──
+  // ── Days by Reference ──
   if (referenceData.length > 0) {
     if (y > doc.internal.pageSize.getHeight() - 40) {
       doc.addPage()
-      y = 15
+      paintPageBg(doc)
+      y = 14
     }
 
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
+    doc.setFontSize(8)
     doc.setTextColor(...mid)
     doc.text('DAYS BY REFERENCE', 14, y)
-    y += 3
+    y += 2
 
-    const refHead = [['Reference', ...allCategories, 'Total']]
     const refBody = referenceData.map((r) => [
       r.reference,
       ...allCategories.map((c) => r.categories[c] ? r.categories[c].toFixed(1) : '-'),
@@ -177,37 +198,25 @@ export async function exportMonthlyProjectPDF({
 
     doc.autoTable({
       startY: y,
-      head: refHead,
+      head: [['Reference', ...allCategories, 'Total']],
       body: refBody,
       foot: refFoot,
-      theme: 'plain',
-      styles: { fontSize: 8, cellPadding: 2.5, textColor: [226, 232, 240] },
-      headStyles: { fillColor: headerBg, textColor: [148, 163, 184], fontStyle: 'bold', fontSize: 7 },
-      footStyles: { fillColor: [20, 30, 48], textColor: primary, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [20, 27, 45] },
-      columnStyles: {
-        0: { halign: 'left' },
-        [allCategories.length + 1]: { textColor: primary, fontStyle: 'bold' },
-      },
-      didParseCell: (data) => {
-        if (data.column.index > 0) data.cell.styles.halign = 'right'
-      },
-      margin: { left: 14, right: 14 },
+      ...tableDefaults(headerBg, primary, allCategories),
     })
   }
 
-  // ── Footer ──
+  // ── Footer on every page ──
   const pageCount = doc.internal.getNumberOfPages()
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i)
+    if (i > 1) paintPageBg(doc) // ensure bg on added pages
     const ph = doc.internal.pageSize.getHeight()
     doc.setFontSize(7)
     doc.setTextColor(...mid)
-    doc.text(`xTimeBox  ·  Generated ${new Date().toLocaleDateString('en-GB')}`, 14, ph - 6)
+    doc.text(`xTimeBox  |  Generated ${new Date().toLocaleDateString('en-GB')}`, 14, ph - 6)
     doc.text(`Page ${i} of ${pageCount}`, pageW - 14, ph - 6, { align: 'right' })
   }
 
-  // Save
   const filename = `${projectName.replace(/[^a-zA-Z0-9]/g, '-')}_${monthLabel.replace(' ', '-')}.pdf`
   doc.save(filename)
 }
