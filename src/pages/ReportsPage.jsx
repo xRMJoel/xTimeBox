@@ -836,7 +836,7 @@ function ReturnedEntries() {
     const { from, to } = getDateRange(range)
     supabase
       .from('timesheet_entries')
-      .select('id, entry_date, day_name, week_ending, time_value, category, status, return_reason, returned_by, user_id, profiles(full_name), projects(name)')
+      .select('id, entry_date, day_name, week_ending, time_value, category, status, return_reason, returned_by, user_id, profiles!user_id(full_name), projects(name)')
       .eq('status', 'returned')
       .gte('entry_date', from)
       .lte('entry_date', to)
@@ -938,7 +938,7 @@ function ProjectTimeReport() {
     const { from, to } = getDateRange(range)
     supabase
       .from('timesheet_entries')
-      .select('id, entry_date, time_value, category, user_id, project_id, profiles(full_name), projects(name, client)')
+      .select('id, entry_date, time_value, category, user_id, project_id, profiles!user_id(full_name), projects(name, client)')
       .gte('entry_date', from)
       .lte('entry_date', to)
       .order('entry_date')
@@ -1434,13 +1434,17 @@ function MonthlyProjectReport({ user }) {
 
     supabase
       .from('timesheet_entries')
-      .select('id, entry_date, week_ending, time_value, category, day_name, notes, status, profiles(full_name), projects(name, client)')
+      .select('id, entry_date, week_ending, time_value, category, day_name, notes, status, profiles!user_id(full_name), projects(name, client)')
       .eq('project_id', selectedProject)
       .gte('entry_date', from)
       .lte('entry_date', to)
       .in('status', activeStatuses)
       .order('entry_date')
-      .then(({ data }) => { setEntries(data || []); setLoading(false) })
+      .then(({ data, error }) => {
+        if (error) console.error('[MonthlyProjectReport] query error:', error)
+        setEntries(data || [])
+        setLoading(false)
+      })
   }, [selectedProject, monthStart, activeStatuses.join(',')])
 
   // Group entries by week_ending, then aggregate categories
