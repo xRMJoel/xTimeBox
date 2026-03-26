@@ -124,7 +124,7 @@ export default function Layout({ children }) {
                   <>
                     <div className="fixed inset-0 z-20" onClick={() => setUserMenuOpen(false)}></div>
                     <div
-                      className="absolute right-0 mt-2 w-52 rounded-xl z-30 py-1"
+                      className="absolute right-0 mt-2 w-64 rounded-xl z-30 py-1"
                       style={{
                         background: 'var(--color-surface-container)',
                         backdropFilter: 'blur(20px)',
@@ -134,7 +134,7 @@ export default function Layout({ children }) {
                     >
                       <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--divider)' }}>
                         <p className="text-sm font-medium text-on-surface">{profile?.full_name}</p>
-                        <p className="text-xs text-on-surface-variant">{profile?.email}</p>
+                        <p className="text-xs text-on-surface-variant truncate">{profile?.email}</p>
                       </div>
                       <Link
                         to="/profile"
