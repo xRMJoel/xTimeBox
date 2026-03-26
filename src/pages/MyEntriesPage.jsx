@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useEntries } from '../hooks/useEntries'
+import { supabase } from '../lib/supabase'
 import EntryCard from '../components/EntryCard'
 import StatusBadge from '../components/StatusBadge'
 import { CATEGORIES, isValidHourIncrement, roundDays, formatDate } from '../lib/constants'
@@ -97,10 +98,10 @@ function getWeekStatus(entries) {
 }
 
 // Collapsible week card
-function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, onSubmit }) {
+function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, onSubmit, nonWorkingDays = new Set() }) {
   const totalDaysRaw = entries.reduce((sum, e) => sum + Number(e.time_value), 0)
   const totalDays = roundDays(totalDaysRaw)
-  const totalHours = entries.reduce((sum, e) => sum + Number(e.time_hours || 0), 0)
+  const totalHours = Math.round(entries.reduce((sum, e) => sum + Number(e.time_hours || 0), 0) * 100) / 100
   const weekStatus = getWeekStatus(entries)
   const hasDrafts = entries.some((e) => e.status === 'draft' || e.status === 'returned')
   const hasReturned = entries.some((e) => e.status === 'returned')
@@ -112,7 +113,17 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
     groups[entry.entry_date].push(entry)
     return groups
   }, {})
-  const sortedDays = Object.keys(dayGroups).sort()
+
+  // Find non-working days in this week (Mon–Fri)
+  const weDate = new Date(weekEnding + 'T12:00:00')
+  const weekStart = new Date(weDate)
+  weekStart.setDate(weDate.getDate() - 4)
+  const weekStartStr = weekStart.toISOString().slice(0, 10)
+  const nwdInWeek = [...nonWorkingDays].filter((d) => d >= weekStartStr && d <= weekEnding)
+
+  // Merge NWD dates into the day list so they appear in order
+  const allDates = new Set([...Object.keys(dayGroups), ...nwdInWeek])
+  const sortedDays = [...allDates].sort()
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden">
@@ -183,7 +194,12 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
           {/* Day groups, entries sorted by project within each day */}
           <div className="divide-y divide-[var(--glass-border-subtle)]">
             {sortedDays.map((date) => {
-              const dayEntries = dayGroups[date]
+              const dayEntries = dayGroups[date] || []
+              const isNwd = nonWorkingDays.has(date)
+              const dayName = dayEntries.length > 0
+                ? dayEntries[0].day_name
+                : new Date(date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long' })
+
               // Group this day's entries by project
               const projectMap = dayEntries.reduce((g, e) => {
                 const key = e.project_id || '_none'
@@ -197,40 +213,51 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
 
               return (
                 <div key={date} className="px-6 py-4">
-                  <div className="font-headline font-bold text-on-surface mb-3">
-                    {dayEntries[0].day_name}, <span className="text-outline">{formatDate(date)}</span>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="font-headline font-bold text-on-surface">
+                      {dayName}, <span className="text-outline">{formatDate(date)}</span>
+                    </span>
+                    {isNwd && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-amber-400 bg-amber-400/10 border border-amber-400/20">
+                        Non-working day
+                      </span>
+                    )}
                   </div>
-                  <div className="space-y-3">
-                    {sortedProjectKeys.map((projectKey) => {
-                      const project = projectMap[projectKey]
-                      const projectTotal = project.entries.reduce((sum, e) => sum + Number(e.time_value), 0)
-                      const projectHours = project.entries.reduce((sum, e) => sum + Number(e.time_hours || 0), 0)
+                  {dayEntries.length > 0 ? (
+                    <div className="space-y-3">
+                      {sortedProjectKeys.map((projectKey) => {
+                        const project = projectMap[projectKey]
+                        const projectTotal = project.entries.reduce((sum, e) => sum + Number(e.time_value), 0)
+                        const projectHours = project.entries.reduce((sum, e) => sum + Number(e.time_hours || 0), 0)
 
-                      return (
-                        <div key={projectKey}>
-                          <div className="flex items-center justify-between mb-2 ml-1">
-                            <div className="flex items-center gap-2">
-                              <span className="material-symbols-outlined text-primary" style={{ fontSize: '16px' }}>folder</span>
-                              <span className="text-sm font-bold text-on-surface">{project.name}</span>
-                              {project.client && <span className="text-outline text-xs">({project.client})</span>}
+                        return (
+                          <div key={projectKey}>
+                            <div className="flex items-center justify-between mb-2 ml-1">
+                              <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary" style={{ fontSize: '16px' }}>folder</span>
+                                <span className="text-sm font-bold text-on-surface">{project.name}</span>
+                                {project.client && <span className="text-outline text-xs">({project.client})</span>}
+                              </div>
+                              <span className="text-primary font-bold text-xs">{projectHours > 0 ? `${projectHours}hrs (${projectTotal.toFixed(2)}d)` : `${projectTotal}d`}</span>
                             </div>
-                            <span className="text-primary font-bold text-xs">{projectHours > 0 ? `${projectHours}hrs (${projectTotal.toFixed(2)}d)` : `${projectTotal}d`}</span>
+                            <div className="space-y-2">
+                              {project.entries.map((entry) => (
+                                <EntryCard
+                                  key={entry.id}
+                                  entry={entry}
+                                  onEdit={onEdit}
+                                  onDelete={onDelete}
+                                  readonly={entry.status === 'signed_off'}
+                                />
+                              ))}
+                            </div>
                           </div>
-                          <div className="space-y-2">
-                            {project.entries.map((entry) => (
-                              <EntryCard
-                                key={entry.id}
-                                entry={entry}
-                                onEdit={onEdit}
-                                onDelete={onDelete}
-                                readonly={entry.status === 'signed_off'}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                        )
+                      })}
+                    </div>
+                  ) : isNwd ? (
+                    <p className="text-sm text-on-surface-variant italic">No entries expected</p>
+                  ) : null}
                 </div>
               )
             })}
@@ -250,11 +277,19 @@ export default function MyEntriesPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState(null)
   const [expandedWeeks, setExpandedWeeks] = useState(new Set())
+  const [nonWorkingDays, setNonWorkingDays] = useState(new Set())
 
   const loadEntries = useCallback(async () => {
     if (user?.id) {
       const data = await fetchUserEntries(user.id)
       setEntries(data)
+
+      // Fetch non-working days for this user
+      const { data: nwdData } = await supabase
+        .from('non_working_days')
+        .select('entry_date')
+        .eq('user_id', user.id)
+      setNonWorkingDays(new Set((nwdData || []).map((r) => r.entry_date)))
     }
   }, [user?.id, fetchUserEntries])
 
@@ -396,6 +431,7 @@ export default function MyEntriesPage() {
               onEdit={setEditingEntry}
               onDelete={handleDelete}
               onSubmit={handleSubmitWeek}
+              nonWorkingDays={nonWorkingDays}
             />
           ))}
         </div>
@@ -420,6 +456,7 @@ export default function MyEntriesPage() {
               onEdit={setEditingEntry}
               onDelete={handleDelete}
               onSubmit={handleSubmitWeek}
+              nonWorkingDays={nonWorkingDays}
             />
           ))}
         </div>
