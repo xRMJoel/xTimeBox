@@ -15,7 +15,7 @@ export default function ProtectedRoute({ children, requireManager = false }) {
       setProfileTimedOut(false)
       return
     }
-    const timer = setTimeout(() => setProfileTimedOut(true), 6000)
+    const timer = setTimeout(() => setProfileTimedOut(true), 15000)
     return () => clearTimeout(timer)
   }, [loading, profile])
 
