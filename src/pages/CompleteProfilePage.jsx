@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
@@ -8,6 +8,14 @@ export default function CompleteProfilePage() {
   const { profile, user, refreshProfile } = useAuth()
   const { theme } = useTheme()
   const navigate = useNavigate()
+
+  // If the profile is already complete (e.g. late auth resolved after safety timeout),
+  // redirect away — the user doesn't need to be here
+  useEffect(() => {
+    if (profile?.profile_complete) {
+      navigate('/home', { replace: true })
+    }
+  }, [profile, navigate])
 
   const meta = user?.user_metadata || {}
   const [fullName, setFullName] = useState(profile?.full_name || meta.full_name || '')
