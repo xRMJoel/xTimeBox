@@ -27,64 +27,71 @@ export function AuthProvider({ children }) {
     return { data, error: null }
   }
 
+  // Shared handler for processing a session (used by both getSession and onAuthStateChange)
+  async function handleSession(s) {
+    setSession(s)
+
+    if (s?.user) {
+      const result = await fetchProfile(s.user.id)
+      if (!result.error) {
+        if (result.data?.deactivated_at) {
+          setSession(null)
+          setProfile(null)
+          profileRef.current = null
+          setDeactivated(true)
+          try { await supabase.auth.signOut() } catch (_) {}
+          return
+        }
+        setProfile(result.data)
+        profileRef.current = result.data
+      } else if (profileRef.current === undefined) {
+        setProfile(null)
+        profileRef.current = null
+      }
+    } else {
+      setProfile(null)
+      profileRef.current = null
+    }
+  }
+
   useEffect(() => {
+    // Explicitly fetch the session on mount — don't rely solely on
+    // onAuthStateChange which may not fire reliably on every refresh
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+      if (!initialised.current) {
+        initialised.current = true
+        await handleSession(s)
+        setLoading(false)
+      }
+    })
+
+    // Listen for subsequent auth changes (sign in, sign out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, s) => {
-        setSession(s)
-
-        if (s?.user) {
-          const result = await fetchProfile(s.user.id)
-          if (!result.error) {
-            // Check if the user has been deactivated
-            if (result.data?.deactivated_at) {
-              setSession(null)
-              setProfile(null)
-              profileRef.current = null
-              setDeactivated(true)
-              try { await supabase.auth.signOut() } catch (_) {}
-              if (!initialised.current) {
-                initialised.current = true
-                setLoading(false)
-              }
-              return
-            }
-            // Fetch succeeded — update profile (data is null if no row exists)
-            setProfile(result.data)
-            profileRef.current = result.data
-          } else if (profileRef.current === undefined) {
-            // First load and fetch failed — set to null so the app doesn't
-            // get stuck on "Loading your profile..." forever
-            setProfile(null)
-            profileRef.current = null
-          }
-          // If fetch failed but we already have a valid profile, keep it
-        } else {
-          setProfile(undefined)
-          profileRef.current = undefined
-        }
-
-        // Mark loading done on the first event (INITIAL_SESSION)
         if (!initialised.current) {
+          // First event arrived before getSession resolved — use it
           initialised.current = true
+          await handleSession(s)
           setLoading(false)
+        } else {
+          // Subsequent events (sign in/out, TOKEN_REFRESHED, etc.)
+          await handleSession(s)
         }
       }
     )
 
-    // Safety net: if no auth event fires within 5 seconds, stop loading anyway
+    // Safety net: if neither getSession nor auth event resolves within 8 seconds
     const safetyTimeout = setTimeout(() => {
       if (!initialised.current) {
-        console.warn('Auth: no session event received, proceeding as unauthenticated')
+        console.warn('Auth: no session resolved, proceeding as unauthenticated')
         initialised.current = true
         setProfile(null)
         profileRef.current = null
         setLoading(false)
       }
-    }, 5000)
+    }, 8000)
 
-    // Recover session when the tab becomes visible again.
-    // Browsers throttle timers in background tabs, so the auto-refresh
-    // can silently miss its window. This forces a fresh check.
+    // Recover session when the tab becomes visible again
     function handleVisibilityChange() {
       if (document.visibilityState === 'visible') {
         supabase.auth.startAutoRefresh()

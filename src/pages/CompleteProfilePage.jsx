@@ -32,28 +32,16 @@ export default function CompleteProfilePage() {
         profile_complete: true,
       }
 
-      // Try insert first (most likely path for invited users with no profile row)
-      const { error: insertErr } = await supabase
+      // Use upsert to handle both new and existing profile rows in one call
+      const { error: upsertErr } = await supabase
         .from('profiles')
-        .insert({
+        .upsert({
           id: userId,
           email: user.email,
           ...profileData,
-        })
+        }, { onConflict: 'id' })
 
-      if (insertErr) {
-        // If row already exists (duplicate key), fall back to update
-        if (insertErr.code === '23505') {
-          const { error: updateErr } = await supabase
-            .from('profiles')
-            .update(profileData)
-            .eq('id', userId)
-
-          if (updateErr) throw updateErr
-        } else {
-          throw insertErr
-        }
-      }
+      if (upsertErr) throw upsertErr
 
       await refreshProfile()
       navigate('/home')
