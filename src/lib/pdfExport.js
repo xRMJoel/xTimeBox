@@ -36,6 +36,16 @@ async function ensureLibs() {
   return libsLoaded
 }
 
+/** Escape HTML special characters to prevent XSS */
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 /** Format a date string like "Fri, 6 Mar 2026" */
 function fmtDate(dateStr) {
   const d = new Date(dateStr + 'T12:00:00')
@@ -88,7 +98,7 @@ function buildReportHTML({
       `<td ${td}>${r.categories[c] ? r.categories[c].toFixed(1) : '-'}</td>`
     ).join('')
     const hoursCell = hasHours ? `<td ${td}>${r.totalHours > 0 ? r.totalHours + 'h' : '-'}</td>` : ''
-    return `<tr style="background:${bg}"><td ${tdLeft}>${r.reference}</td>${cells}${hoursCell}<td ${tdTotal}>${r.total.toFixed(2)}</td></tr>`
+    return `<tr style="background:${bg}"><td ${tdLeft}>${escapeHtml(r.reference)}</td>${cells}${hoursCell}<td ${tdTotal}>${r.total.toFixed(2)}</td></tr>`
   }).join('')
 
   const refFootCells = allCategories.map(c => {
@@ -101,7 +111,7 @@ function buildReportHTML({
   <!-- Title -->
   <div style="background:${headerBg};border-radius:8px;padding:16px 24px;margin-bottom:20px">
     <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:22px;color:#ffffff">Monthly Project Report</div>
-    <div style="font-family:'Nunito Sans',sans-serif;font-size:13px;color:${accent};margin-top:4px">${projectName}  |  ${client}  |  ${monthLabel}</div>
+    <div style="font-family:'Nunito Sans',sans-serif;font-size:13px;color:${accent};margin-top:4px">${escapeHtml(projectName)}  |  ${escapeHtml(client)}  |  ${escapeHtml(monthLabel)}</div>
   </div>
 
   <!-- Summary cards -->
@@ -121,7 +131,7 @@ function buildReportHTML({
     </div>
     <div style="flex:1;background:${light};border-radius:8px;padding:10px 16px">
       <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${mid};font-family:'Nunito Sans',sans-serif">Client</div>
-      <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:16px;color:${dark};margin-top:4px">${client || '-'}</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:16px;color:${dark};margin-top:4px">${escapeHtml(client || '-')}</div>
     </div>
   </div>
 
@@ -131,7 +141,7 @@ function buildReportHTML({
     <thead>
       <tr style="background:${headerBg}">
         <th ${thLeft}>Week Ending</th>
-        ${allCategories.map(c => `<th ${th}>${c}</th>`).join('')}
+        ${allCategories.map(c => `<th ${th}>${escapeHtml(c)}</th>`).join('')}
         ${hasHours ? `<th ${th}>Hours</th>` : ''}
         <th style="${cellH}padding:0 12px;text-align:right;font-size:11px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif">Days</th>
       </tr>
@@ -154,7 +164,7 @@ function buildReportHTML({
     <thead>
       <tr style="background:${headerBg}">
         <th ${thLeft}>Reference</th>
-        ${allCategories.map(c => `<th ${th}>${c}</th>`).join('')}
+        ${allCategories.map(c => `<th ${th}>${escapeHtml(c)}</th>`).join('')}
         ${hasHours ? `<th ${th}>Hours</th>` : ''}
         <th style="${cellH}padding:0 12px;text-align:right;font-size:11px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif">Days</th>
       </tr>
@@ -174,7 +184,7 @@ function buildReportHTML({
   <!-- Footer -->
   <div style="display:flex;justify-content:space-between;font-size:10px;color:${mid};font-family:'Nunito Sans',sans-serif;padding-top:8px;border-top:1px solid ${border}">
     <span>xTimeBox  |  Generated ${new Date().toLocaleDateString('en-GB')}</span>
-    <span>${projectName} - ${monthLabel}</span>
+    <span>${escapeHtml(projectName)} - ${escapeHtml(monthLabel)}</span>
   </div>
 </div>`
 }

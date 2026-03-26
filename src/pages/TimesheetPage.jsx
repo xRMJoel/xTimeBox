@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useEntries } from '../hooks/useEntries'
@@ -319,6 +319,7 @@ export default function TimesheetPage() {
   const [nonWorkingDays, setNonWorkingDays] = useState(new Set()) // Set of date strings
   const [nwdChanged, setNwdChanged] = useState(false) // tracks if user toggled a non-working day
   const [validationErrors, setValidationErrors] = useState({}) // keyed by "date:index:field"
+  const submittingRef = useRef(false)
 
   // Load user's assigned projects (including hours_per_day from the assignment)
   useEffect(() => {
@@ -514,9 +515,13 @@ export default function TimesheetPage() {
   }
 
   async function handleSubmit({ skipNavigate = false } = {}) {
+    if (submittingRef.current) return false
+    submittingRef.current = true
+
     const validationError = validate()
     if (validationError) {
       setSubmitStatus({ type: 'error', message: validationError })
+      submittingRef.current = false
       return false
     }
 
@@ -606,6 +611,7 @@ export default function TimesheetPage() {
 
       if (ops.length === 0 && !nwdChanged) {
         setSubmitStatus({ type: 'error', message: 'No changes to save.' })
+        submittingRef.current = false
         return false
       }
 
@@ -626,6 +632,8 @@ export default function TimesheetPage() {
     } catch (err) {
       setSubmitStatus({ type: 'error', message: err.message })
       return false
+    } finally {
+      submittingRef.current = false
     }
   }
 

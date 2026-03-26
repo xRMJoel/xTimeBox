@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
-import { getCurrentWeekFriday, getWeekDates, getWorkingDaysInMonth, CATEGORIES, TIME_BLOCKS, generateReference, formatDate } from '../lib/constants'
+import { getCurrentWeekFriday, getWeekDates, getWorkingDaysInMonth, CATEGORIES, generateReference, formatDate, isValidHourIncrement, hoursToDaysRaw, daysToTimeBlock } from '../lib/constants'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function HomePage() {
@@ -121,7 +121,7 @@ export default function HomePage() {
     const weekEnding = getCurrentWeekFriday()
     const { data } = await supabase
       .from('timesheet_entries')
-      .select('id, entry_date, day_name, time_value, status, category, time_block, project_id, feature_tag, notes, projects(name)')
+      .select('id, entry_date, day_name, time_value, time_hours, status, category, time_block, project_id, feature_tag, notes, projects(name)')
       .eq('user_id', user.id)
       .eq('week_ending', weekEnding)
       .order('entry_date', { ascending: true })
@@ -544,7 +544,7 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
   const [editingId, setEditingId] = useState(null)
 
   // Form state — used for both new entries and editing existing ones
-  const emptyForm = { project_id: '', category: '', time_block: '', feature_tag: '', notes: '' }
+  const emptyForm = { project_id: '', category: '', time_hours: '', feature_tag: '', notes: '' }
   const [form, setForm] = useState(emptyForm)
 
   // Load user's assigned projects
@@ -552,10 +552,13 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
     if (!user?.id) return
     supabase
       .from('user_projects')
-      .select('project_id, projects(id, name, client, status)')
+      .select('project_id, hours_per_day, projects(id, name, client, status)')
       .eq('user_id', user.id)
       .then(({ data }) => {
-        const active = (data || []).map((up) => up.projects).filter((p) => p && p.status === 'active')
+        const active = (data || []).map((up) => ({
+          ...up.projects,
+          hours_per_day: up.hours_per_day ? Number(up.hours_per_day) : null,
+        })).filter((p) => p && p.status === 'active')
         setUserProjects(active)
         // Default to only project if there's exactly one and we're not editing
         if (active.length === 1 && !editingId) {
@@ -575,7 +578,7 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
     setForm({
       project_id: entry.project_id || '',
       category: entry.category || '',
-      time_block: entry.time_block || '',
+      time_hours: entry.time_hours || '',
       feature_tag: entry.feature_tag || '',
       notes: entry.notes || '',
     })
@@ -609,8 +612,10 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
   }
 
   const category = CATEGORIES.find((c) => c.value === form.category)
-  const timeBlock = TIME_BLOCKS.find((t) => t.value === form.time_block)
-  const canSave = form.project_id && form.category && form.time_block
+  const entryProject = userProjects.find((p) => p.id === form.project_id)
+  const hoursPerDay = entryProject?.hours_per_day
+  const hrs = Number(form.time_hours) || 0
+  const canSave = form.project_id && form.category && form.time_hours && isValidHourIncrement(hrs)
 
   async function handleSave() {
     if (!canSave) return
@@ -618,22 +623,31 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
     setError(null)
 
     // Validation
+    if (!isValidHourIncrement(hrs)) {
+      setError('Hours must be in 0.25 increments (e.g. 0.5, 1, 1.5, 7.5).')
+      setSaving(false)
+      return
+    }
+
     if (category?.showReference && !form.feature_tag.trim()) {
       setError(`Reference is required for ${form.category}.`)
       setSaving(false)
       return
     }
 
+    const rawDays = hoursPerDay ? hoursToDaysRaw(hrs, hoursPerDay) : hrs
+    const blockLabel = daysToTimeBlock(rawDays)
+
     try {
       if (editingId) {
         // Update existing entry
-        const entryProject = userProjects.find((p) => p.id === form.project_id)
         const updates = {
           project_id: form.project_id,
           client: entryProject?.client || '',
           category: form.category,
-          time_block: form.time_block,
-          time_value: timeBlock.numericValue,
+          time_hours: hrs,
+          time_block: blockLabel,
+          time_value: rawDays,
           feature_tag: form.feature_tag || null,
           notes: form.notes || null,
         }
@@ -646,7 +660,6 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
         if (updateErr) throw updateErr
       } else {
         // Insert new entry
-        const entryProject = userProjects.find((p) => p.id === form.project_id)
         const existingCount = existingEntries.length
         const row = {
           user_id: user.id,
@@ -657,8 +670,9 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
           day_name: day.dayName,
           entry_date: day.date,
           category: form.category,
-          time_block: form.time_block,
-          time_value: timeBlock.numericValue,
+          time_hours: hrs,
+          time_block: blockLabel,
+          time_value: rawDays,
           feature_tag: form.feature_tag || null,
           notes: form.notes || null,
           status: 'draft',
@@ -735,7 +749,7 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
                         {entry.status === 'signed_off' ? 'Signed off' : entry.status}
                       </span>
                     </div>
-                    <p className="text-xs text-on-surface-variant mt-0.5">{entry.category} - {entry.time_block}</p>
+                    <p className="text-xs text-on-surface-variant mt-0.5">{entry.category} - {entry.time_hours ? `${entry.time_hours}hrs` : entry.time_block}</p>
                   </div>
                   <span className="text-sm font-bold text-on-surface tabular-nums">{Number(entry.time_value)}d</span>
                   {isEditable(entry.status) && (
@@ -807,18 +821,27 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
                 </select>
               </div>
               <div>
-                <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Time Block</label>
-                <select
-                  value={form.time_block}
-                  onChange={(e) => updateField('time_block', e.target.value)}
-                  className="w-full rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
-                  style={{ background: 'var(--color-surface-variant)', border: 'none' }}
-                >
-                  <option value="">Select time</option>
-                  {TIME_BLOCKS.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
-                  ))}
-                </select>
+                <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Hours</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0.25"
+                    step="0.25"
+                    value={form.time_hours}
+                    onChange={(e) => updateField('time_hours', e.target.value ? Number(e.target.value) : '')}
+                    placeholder="e.g. 7.5"
+                    className="w-full rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
+                    style={{ background: 'var(--color-surface-variant)', border: 'none' }}
+                  />
+                  {form.time_hours && hoursPerDay ? (
+                    <span className="text-xs text-on-surface-variant whitespace-nowrap font-medium" title={`${form.time_hours}hrs / ${hoursPerDay}hrs per day`}>
+                      {hoursToDaysRaw(Number(form.time_hours), hoursPerDay).toFixed(2)}d
+                    </span>
+                  ) : null}
+                </div>
+                {form.time_hours && !isValidHourIncrement(Number(form.time_hours)) && (
+                  <p className="text-[10px] text-error mt-1">Must be in 0.25 increments</p>
+                )}
               </div>
               {category?.showReference && (
                 <div>
