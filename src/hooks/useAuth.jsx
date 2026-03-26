@@ -27,39 +27,42 @@ export function AuthProvider({ children }) {
     return { data, error: null }
   }
 
-  useEffect(() => {
-    // Get session on mount as the primary initialisation path
-    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
-      if (initialised.current) return // onAuthStateChange already handled it
-
-      setSession(s)
-
-      if (s?.user) {
-        const result = await fetchProfile(s.user.id)
-        if (!result.error) {
-          if (result.data?.deactivated_at) {
-            setSession(null)
-            setProfile(null)
-            profileRef.current = null
-            setDeactivated(true)
-            try { await supabase.auth.signOut() } catch (_) {}
-            initialised.current = true
-            setLoading(false)
-            return
-          }
-          setProfile(result.data)
-          profileRef.current = result.data
-        } else {
+  // Load profile in background — never blocks init
+  function loadProfileInBackground(userId) {
+    fetchProfile(userId).then((result) => {
+      if (!result.error) {
+        if (result.data?.deactivated_at) {
+          setSession(null)
           setProfile(null)
           profileRef.current = null
+          setDeactivated(true)
+          supabase.auth.signOut().catch(() => {})
+          return
         }
+        setProfile(result.data)
+        profileRef.current = result.data
       } else {
         setProfile(null)
         profileRef.current = null
       }
+    })
+  }
+
+  useEffect(() => {
+    // Get session on mount as the primary initialisation path
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      if (initialised.current) return // onAuthStateChange already handled it
 
       initialised.current = true
-      setLoading(false)
+      setSession(s)
+      setLoading(false) // Unblock the app immediately
+
+      if (s?.user) {
+        loadProfileInBackground(s.user.id) // Profile loads async
+      } else {
+        setProfile(null)
+        profileRef.current = null
+      }
     }).catch(() => {
       if (!initialised.current) {
         initialised.current = true
@@ -71,43 +74,24 @@ export function AuthProvider({ children }) {
 
     // Listen for auth changes (sign in, sign out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, s) => {
+      (event, s) => {
         setSession(s)
 
+        if (!initialised.current) {
+          initialised.current = true
+          setLoading(false) // Unblock the app immediately
+        }
+
         if (s?.user) {
-          const result = await fetchProfile(s.user.id)
-          if (!result.error) {
-            if (result.data?.deactivated_at) {
-              setSession(null)
-              setProfile(null)
-              profileRef.current = null
-              setDeactivated(true)
-              try { await supabase.auth.signOut() } catch (_) {}
-              if (!initialised.current) {
-                initialised.current = true
-                setLoading(false)
-              }
-              return
-            }
-            setProfile(result.data)
-            profileRef.current = result.data
-          } else if (profileRef.current === undefined) {
-            setProfile(null)
-            profileRef.current = null
-          }
+          loadProfileInBackground(s.user.id) // Profile loads async
         } else {
           setProfile(undefined)
           profileRef.current = undefined
         }
-
-        if (!initialised.current) {
-          initialised.current = true
-          setLoading(false)
-        }
       }
     )
 
-    // Safety net: if neither path resolves within 5 seconds
+    // Safety net: if neither path resolves within 15 seconds
     const safetyTimeout = setTimeout(() => {
       if (!initialised.current) {
         console.warn('Auth: no session resolved, proceeding as unauthenticated')
@@ -116,7 +100,7 @@ export function AuthProvider({ children }) {
         profileRef.current = null
         setLoading(false)
       }
-    }, 5000)
+    }, 15000)
 
     // Recover session when the tab becomes visible again
     function handleVisibilityChange() {
