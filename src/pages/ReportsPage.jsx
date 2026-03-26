@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
-import { getCurrentWeekFriday, getWeekDates, CATEGORIES, formatDate } from '../lib/constants'
+import { getCurrentWeekFriday, getWeekDates, CATEGORIES, formatDate, roundDays } from '../lib/constants'
 import { exportMonthlyProjectPDF } from '../lib/pdfExport'
 import LoadingSpinner from '../components/LoadingSpinner'
 
@@ -1451,18 +1451,24 @@ function MonthlyProjectReport({ user }) {
   }, [selectedProject, monthStart, activeStatuses.join(',')])
 
   // Group entries by week_ending, then aggregate categories (both days and hours)
+  // Rounding to 0.25 increments happens at the WEEK level, not per entry
   const weekData = useMemo(() => {
     const weekMap = {}
     for (const e of entries) {
       const we = e.week_ending
-      if (!weekMap[we]) weekMap[we] = { weekEnding: we, categories: {}, categoriesHours: {}, total: 0, totalHours: 0 }
+      if (!weekMap[we]) weekMap[we] = { weekEnding: we, categories: {}, categoriesHours: {}, totalRaw: 0, total: 0, totalHours: 0 }
       const cat = e.category || 'Other'
       weekMap[we].categories[cat] = (weekMap[we].categories[cat] || 0) + Number(e.time_value || 0)
       weekMap[we].categoriesHours[cat] = (weekMap[we].categoriesHours[cat] || 0) + Number(e.time_hours || 0)
-      weekMap[we].total += Number(e.time_value || 0)
+      weekMap[we].totalRaw += Number(e.time_value || 0)
       weekMap[we].totalHours += Number(e.time_hours || 0)
     }
-    return Object.values(weekMap).sort((a, b) => a.weekEnding.localeCompare(b.weekEnding))
+    // Apply week-level rounding: round the sum of raw days up to nearest 0.25
+    const weeks = Object.values(weekMap)
+    for (const w of weeks) {
+      w.total = roundDays(w.totalRaw)
+    }
+    return weeks.sort((a, b) => a.weekEnding.localeCompare(b.weekEnding))
   }, [entries])
 
   // All categories used across all weeks (for consistent columns)

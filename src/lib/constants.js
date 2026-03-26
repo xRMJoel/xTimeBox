@@ -18,36 +18,38 @@ export const TIME_BLOCKS = [
   { value: 'Day', label: 'Full Day (1)', numericValue: 1 },
 ]
 
-// Generate hour options in 0.5hr increments (0.5, 1.0, 1.5, ...)
-// No upper cap — users can log any amount of hours per entry
-export function generateHourOptions(maxHours = 24) {
-  const options = []
-  for (let h = 0.5; h <= maxHours; h += 0.5) {
-    options.push({ value: h, label: `${h} hr${h !== 1 ? 's' : ''}` })
-  }
-  return options
+// Validate that hours are in 0.25 increments
+export function isValidHourIncrement(hours) {
+  if (!hours || hours <= 0) return false
+  // Check it's a multiple of 0.25 (account for floating point)
+  return Math.abs(Math.round(hours * 4) - hours * 4) < 0.001
 }
 
-// Convert hours to days (rounded UP to nearest 0.25)
-export function hoursToDays(hours, hoursPerDay) {
+// Convert hours to raw (unrounded) days — used per entry
+export function hoursToDaysRaw(hours, hoursPerDay) {
   if (!hours || !hoursPerDay || hoursPerDay <= 0) return 0
-  const rawDays = hours / hoursPerDay
-  return Math.ceil(rawDays * 4) / 4
+  return hours / hoursPerDay
 }
 
-// Format a day value for display (e.g. "0.25d")
-export function formatDays(days) {
-  return `${days.toFixed(2)}d`
+// Round a day total UP to nearest 0.25 — used at week level only
+export function roundDays(days) {
+  if (!days || days <= 0) return 0
+  return Math.ceil(days * 4) / 4
 }
 
-// Get a human-readable time_block label from hours and hoursPerDay
-export function hoursToTimeBlock(hours, hoursPerDay) {
-  const days = hoursToDays(hours, hoursPerDay)
-  if (days === 0.25) return 'Quarter Day'
-  if (days === 0.5) return 'Half Day'
-  if (days === 0.75) return 'Three Quarter Day'
-  if (days === 1) return 'Day'
-  return `${days.toFixed(2)} Days`
+// Convenience: convert hours to rounded days (for week-level totals)
+export function hoursToDays(hours, hoursPerDay) {
+  return roundDays(hoursToDaysRaw(hours, hoursPerDay))
+}
+
+// Get a human-readable time_block label from a day value
+export function daysToTimeBlock(days) {
+  const rounded = roundDays(days)
+  if (rounded === 0.25) return 'Quarter Day'
+  if (rounded === 0.5) return 'Half Day'
+  if (rounded === 0.75) return 'Three Quarter Day'
+  if (rounded === 1) return 'Day'
+  return `${rounded.toFixed(2)} Days`
 }
 
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']

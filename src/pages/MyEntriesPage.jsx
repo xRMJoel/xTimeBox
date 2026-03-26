@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useEntries } from '../hooks/useEntries'
 import EntryCard from '../components/EntryCard'
 import StatusBadge from '../components/StatusBadge'
-import { CATEGORIES, generateHourOptions, hoursToDays, hoursToTimeBlock, formatDate } from '../lib/constants'
+import { CATEGORIES, isValidHourIncrement, roundDays, formatDate } from '../lib/constants'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 // Inline edit modal
@@ -15,17 +15,18 @@ function EditModal({ entry, onSave, onCancel, saving }) {
   const [notes, setNotes] = useState(entry.notes || '')
 
   const cat = CATEGORIES.find((c) => c.value === category)
-  const hourOptions = generateHourOptions()
+  const [hourError, setHourError] = useState('')
 
-  // We don't have hours_per_day in this context, so we'll pass the raw hours
-  // and let the backend/caller handle the conversion if needed
   function handleSave() {
     const hrs = Number(timeHours) || 0
+    if (!isValidHourIncrement(hrs)) {
+      setHourError('Must be in 0.25 increments')
+      return
+    }
+    setHourError('')
     onSave({
       category,
       time_hours: hrs || null,
-      // time_value and time_block will need recalculating — but we don't have hours_per_day here
-      // Pass what we have; the caller should handle this
       feature_tag: featureTag || null,
       notes: notes || null,
     })
@@ -47,13 +48,16 @@ function EditModal({ entry, onSave, onCancel, saving }) {
         </div>
 
         <div>
-          <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Hours</label>
-          <select value={timeHours} onChange={(e) => setTimeHours(e.target.value ? Number(e.target.value) : '')} className="input-dark">
-            <option value="">Select hours</option>
-            {hourOptions.map((h) => (
-              <option key={h.value} value={h.value}>{h.label}</option>
-            ))}
-          </select>
+          <label className={`block text-[9px] font-bold uppercase tracking-widest mb-1.5 ${hourError ? 'text-error' : 'text-outline'}`}>Hours {hourError && `— ${hourError}`}</label>
+          <input
+            type="number"
+            step="0.25"
+            min="0.25"
+            value={timeHours}
+            onChange={(e) => { setTimeHours(e.target.value ? Number(e.target.value) : ''); setHourError('') }}
+            placeholder="e.g. 3.5"
+            className="input-dark"
+          />
         </div>
 
         {cat?.showReference && (
@@ -94,7 +98,8 @@ function getWeekStatus(entries) {
 
 // Collapsible week card
 function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, onSubmit }) {
-  const totalDays = entries.reduce((sum, e) => sum + Number(e.time_value), 0)
+  const totalDaysRaw = entries.reduce((sum, e) => sum + Number(e.time_value), 0)
+  const totalDays = roundDays(totalDaysRaw)
   const totalHours = entries.reduce((sum, e) => sum + Number(e.time_hours || 0), 0)
   const weekStatus = getWeekStatus(entries)
   const hasDrafts = entries.some((e) => e.status === 'draft' || e.status === 'returned')

@@ -7,9 +7,10 @@ import WeekCalendar from '../components/WeekCalendar'
 import {
   CATEGORIES,
   TIME_BLOCKS,
-  generateHourOptions,
-  hoursToDays,
-  hoursToTimeBlock,
+  isValidHourIncrement,
+  hoursToDaysRaw,
+  roundDays,
+  daysToTimeBlock,
   getCurrentWeekFriday,
   getWeekDates,
   generateReference,
@@ -27,8 +28,7 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects,
   // Get hours_per_day for the selected project
   const selectedProject = userProjects.find((p) => p.id === entry.project_id)
   const hoursPerDay = selectedProject?.hours_per_day
-  const hourOptions = generateHourOptions()
-  const dayEquivalent = entry.time_hours && hoursPerDay ? hoursToDays(entry.time_hours, hoursPerDay) : null
+  const rawDayEquivalent = entry.time_hours && hoursPerDay ? hoursToDaysRaw(entry.time_hours, hoursPerDay) : null
 
   return (
     <div className={`glass-card-inset rounded-xl p-5 relative group/entry ${readonly ? 'opacity-70' : ''}`}>
@@ -109,23 +109,22 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects,
         </div>
 
         <div>
-          <label className={`block text-[9px] font-bold uppercase tracking-widest mb-1.5 ${errors?.time_hours ? 'text-error' : 'text-outline'}`}>Hours {errors?.time_hours && '— required'}</label>
+          <label className={`block text-[9px] font-bold uppercase tracking-widest mb-1.5 ${errors?.time_hours ? 'text-error' : 'text-outline'}`}>Hours {errors?.time_hours && '— required (0.25 increments)'}</label>
           <div className="flex items-center gap-2">
-            <select
+            <input
+              type="number"
+              step="0.25"
+              min="0.25"
               value={entry.time_hours || ''}
               onChange={(e) => onChange(index, 'time_hours', e.target.value ? Number(e.target.value) : '')}
               disabled={readonly || !entry.project_id}
+              placeholder={!entry.project_id ? 'Select project first' : 'e.g. 3.5'}
               className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
               style={errors?.time_hours ? errorStyle : normalStyle}
-            >
-              <option value="">{!entry.project_id ? 'Select project first' : 'Select hours'}</option>
-              {hourOptions.map((h) => (
-                <option key={h.value} value={h.value}>{h.label}</option>
-              ))}
-            </select>
-            {dayEquivalent !== null && (
-              <span className="text-xs text-on-surface-variant whitespace-nowrap font-medium" title={`${entry.time_hours}hrs / ${hoursPerDay}hrs per day = ${dayEquivalent}d`}>
-                = {dayEquivalent.toFixed(2)}d
+            />
+            {rawDayEquivalent !== null && (
+              <span className="text-xs text-on-surface-variant whitespace-nowrap font-medium" title={`${entry.time_hours}hrs / ${hoursPerDay}hrs per day`}>
+                = {rawDayEquivalent.toFixed(4)}d
               </span>
             )}
           </div>
@@ -179,15 +178,15 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects,
 function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, userProjects, isNonWorking, onToggleNonWorking, validationErrors }) {
   const [open, setOpen] = useState(true)
   const totalHours = entries.reduce((sum, e) => sum + (Number(e.time_hours) || 0), 0)
-  const totalDays = entries.reduce((sum, e) => {
+  const totalDaysRaw = entries.reduce((sum, e) => {
     if (e._id) {
-      // Existing entry — use stored time_value (already calculated)
+      // Existing entry — use stored time_value (unrounded)
       return sum + (Number(e.time_value) || 0)
     }
-    // New entry — calculate from hours
+    // New entry — calculate raw days from hours
     const proj = userProjects.find((p) => p.id === e.project_id)
     if (e.time_hours && proj?.hours_per_day) {
-      return sum + hoursToDays(e.time_hours, proj.hours_per_day)
+      return sum + hoursToDaysRaw(e.time_hours, proj.hours_per_day)
     }
     return sum
   }, 0)
@@ -218,7 +217,6 @@ function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, us
           ) : (
             <span className="text-primary font-bold">
               {totalHours > 0 ? `${totalHours}hrs` : '0hrs'}
-              {totalDays > 0 && <span className="text-on-surface-variant font-medium ml-1.5 text-sm">({totalDays.toFixed(2)}d)</span>}
             </span>
           )}
           <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors">
@@ -437,20 +435,20 @@ export default function TimesheetPage() {
       // Don't allow editing submitted/signed_off entries
       if (entry?.status === 'signed_off' || entry?.status === 'submitted') return prev
       dayEntries[index] = { ...entry, [field]: value }
-      // If time_hours changed, recalculate time_value and time_block
+      // If time_hours changed, recalculate raw (unrounded) time_value
       if (field === 'time_hours' && value) {
         const proj = userProjects.find((p) => p.id === (dayEntries[index].project_id))
         if (proj?.hours_per_day) {
-          dayEntries[index].time_value = hoursToDays(Number(value), proj.hours_per_day)
-          dayEntries[index].time_block = hoursToTimeBlock(Number(value), proj.hours_per_day)
+          dayEntries[index].time_value = hoursToDaysRaw(Number(value), proj.hours_per_day)
+          dayEntries[index].time_block = daysToTimeBlock(dayEntries[index].time_value)
         }
       }
-      // If project changed, recalculate time_value from hours with new rate
+      // If project changed, recalculate raw time_value from hours with new rate
       if (field === 'project_id' && dayEntries[index].time_hours) {
         const proj = userProjects.find((p) => p.id === value)
         if (proj?.hours_per_day) {
-          dayEntries[index].time_value = hoursToDays(Number(dayEntries[index].time_hours), proj.hours_per_day)
-          dayEntries[index].time_block = hoursToTimeBlock(Number(dayEntries[index].time_hours), proj.hours_per_day)
+          dayEntries[index].time_value = hoursToDaysRaw(Number(dayEntries[index].time_hours), proj.hours_per_day)
+          dayEntries[index].time_block = daysToTimeBlock(dayEntries[index].time_value)
         }
       }
       return { ...prev, [date]: dayEntries }
@@ -487,7 +485,7 @@ export default function TimesheetPage() {
         const key = (field) => `${day.date}:${idx}:${field}`
         if (!entry.project_id) errors[key('project_id')] = true
         if (!entry.category) errors[key('category')] = true
-        if (!entry.time_hours) errors[key('time_hours')] = true
+        if (!entry.time_hours || !isValidHourIncrement(entry.time_hours)) errors[key('time_hours')] = true
 
         const cat = CATEGORIES.find((c) => c.value === entry.category)
         if (cat?.showReference && !entry.feature_tag.trim()) errors[key('feature_tag')] = true
@@ -543,15 +541,15 @@ export default function TimesheetPage() {
             const proj = userProjects.find((p) => p.id === entry.project_id)
             const hrs = Number(entry.time_hours) || 0
             const hpd = proj?.hours_per_day
-            const calculatedDays = hpd ? hoursToDays(hrs, hpd) : entry.time_value
-            const calculatedBlock = hpd ? hoursToTimeBlock(hrs, hpd) : entry.time_block
+            const rawDays = hpd ? hoursToDaysRaw(hrs, hpd) : entry.time_value
+            const blockLabel = daysToTimeBlock(rawDays)
             updates.push({
               id: entry._id,
               changes: {
                 category: entry.category,
                 time_hours: hrs || null,
-                time_block: calculatedBlock,
-                time_value: calculatedDays,
+                time_block: blockLabel,
+                time_value: rawDays,
                 feature_tag: entry.feature_tag || null,
                 notes: entry.notes || null,
                 project_id: entry.project_id || null,
@@ -572,8 +570,8 @@ export default function TimesheetPage() {
             const entryProject = userProjects.find((p) => p.id === entry.project_id)
             const hrs = Number(entry.time_hours)
             const hpd = entryProject?.hours_per_day
-            const calculatedDays = hpd ? hoursToDays(hrs, hpd) : hrs
-            const calculatedBlock = hpd ? hoursToTimeBlock(hrs, hpd) : `${hrs} Hours`
+            const rawDays = hpd ? hoursToDaysRaw(hrs, hpd) : hrs
+            const blockLabel = daysToTimeBlock(rawDays)
             newRows.push({
               user_id: user.id,
               reference: generateReference(day.date, counter++),
@@ -584,8 +582,8 @@ export default function TimesheetPage() {
               entry_date: day.date,
               category: entry.category,
               time_hours: hrs,
-              time_block: calculatedBlock,
-              time_value: calculatedDays,
+              time_block: blockLabel,
+              time_value: rawDays,
               feature_tag: entry.feature_tag || null,
               notes: entry.notes || null,
               status: 'draft',
@@ -647,15 +645,16 @@ export default function TimesheetPage() {
     }
   }
 
-  // Calculate totals
+  // Calculate totals — rounding happens at week level
   const allVisible = visibleDays.flatMap((day) => (entriesByDate[day.date] || []).filter((e) => !e._deleted))
   const totalHoursAll = allVisible.reduce((sum, e) => sum + (Number(e.time_hours) || 0), 0)
-  const totalDays = allVisible.reduce((sum, e) => {
+  const totalDaysRaw = allVisible.reduce((sum, e) => {
     if (e._id) return sum + (Number(e.time_value) || 0)
     const proj = userProjects.find((p) => p.id === e.project_id)
-    if (e.time_hours && proj?.hours_per_day) return sum + hoursToDays(Number(e.time_hours), proj.hours_per_day)
+    if (e.time_hours && proj?.hours_per_day) return sum + hoursToDaysRaw(Number(e.time_hours), proj.hours_per_day)
     return sum
   }, 0)
+  const totalDays = roundDays(totalDaysRaw)
   const newEntryCount = allVisible.filter((e) => !e._id && e.category && e.time_hours).length
   const dirtyCount = allVisible.filter((e) => e._id && isDirty(e)).length
   const deletedCount = visibleDays.reduce((sum, day) => {
