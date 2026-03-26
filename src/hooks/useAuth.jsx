@@ -44,7 +44,10 @@ export function AuthProvider({ children }) {
         }
         setProfile(result.data)
         profileRef.current = result.data
-      } else if (profileRef.current === undefined) {
+      } else {
+        // Fetch failed — always set profile to null so the app doesn't
+        // get stuck on "Loading your profile..." forever
+        console.error('Profile fetch failed, setting profile to null')
         setProfile(null)
         profileRef.current = null
       }
@@ -58,9 +61,19 @@ export function AuthProvider({ children }) {
     // Explicitly fetch the session on mount — don't rely solely on
     // onAuthStateChange which may not fire reliably on every refresh
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+      console.log('getSession resolved:', s ? 'session found' : 'no session')
       if (!initialised.current) {
         initialised.current = true
         await handleSession(s)
+        setLoading(false)
+        console.log('Auth initialised via getSession')
+      }
+    }).catch((err) => {
+      console.error('getSession failed:', err)
+      if (!initialised.current) {
+        initialised.current = true
+        setProfile(null)
+        profileRef.current = null
         setLoading(false)
       }
     })
