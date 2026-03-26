@@ -501,10 +501,10 @@ function ApprovalsTab() {
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                 <AdminMiniCard label="This week" value={`${Math.round(weekDays * 100) / 100}`} unit="days" colour="cyan" />
                 <AdminMiniCard label="This month" value={`${Math.round(monthDays * 100) / 100}`} unit="days" colour="purple" />
-                <AdminMiniCard label="Missing" value={`${missingCount}/${workingDays}`} unit="days" colour={missingCount > 0 ? 'red' : 'green'} />
-                <AdminMiniCard label="Draft" value={`${draftCount}/${workingDays}`} unit="entries" colour="yellow" />
-                <AdminMiniCard label="Submitted" value={`${submittedCount}/${workingDays}`} unit="entries" colour="cyan" />
-                <AdminMiniCard label="Signed off" value={`${signedOffCount}/${workingDays}`} unit="entries" colour="green" />
+                <AdminMiniCard label="Missing" value={`${missingCount}`} unit="days" colour={missingCount > 0 ? 'red' : 'green'} />
+                <AdminMiniCard label="Draft" value={`${draftCount}`} unit="entries" colour="yellow" />
+                <AdminMiniCard label="Submitted" value={`${submittedCount}`} unit="entries" colour="cyan" />
+                <AdminMiniCard label="Signed off" value={`${signedOffCount}`} unit="entries" colour="green" />
               </div>
             </div>
           )

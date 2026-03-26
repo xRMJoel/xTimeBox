@@ -238,28 +238,28 @@ export default function HomePage() {
           />
           <StatsCard
             label="Missing"
-            value={initialLoad ? '...' : `${stats.missingCount}/${stats.workingDays}`}
+            value={initialLoad ? '...' : stats.missingCount}
             unit="days"
             subtitle="No entries logged"
             colour={stats.missingCount > 0 ? 'red' : 'green'}
           />
           <StatsCard
             label="Draft"
-            value={initialLoad ? '...' : `${stats.draftCount}/${stats.workingDays}`}
+            value={initialLoad ? '...' : stats.draftCount}
             unit="entries"
             subtitle="Not yet submitted"
             colour="yellow"
           />
           <StatsCard
             label="Submitted"
-            value={initialLoad ? '...' : `${stats.submittedCount}/${stats.workingDays}`}
+            value={initialLoad ? '...' : stats.submittedCount}
             unit="entries"
             subtitle="Awaiting sign-off"
             colour="cyan"
           />
           <StatsCard
             label="Signed off"
-            value={initialLoad ? '...' : `${stats.signedOffCount}/${stats.workingDays}`}
+            value={initialLoad ? '...' : stats.signedOffCount}
             unit="entries"
             subtitle="Approved"
             colour="green"
