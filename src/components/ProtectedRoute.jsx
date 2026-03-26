@@ -51,6 +51,11 @@ export default function ProtectedRoute({ children, requireManager = false }) {
     return <Navigate to="/complete-profile" replace />
   }
 
+  // If we're on complete-profile but profile is already complete, redirect to home
+  if (profile?.profile_complete && location.pathname === '/complete-profile') {
+    return <Navigate to="/home" replace />
+  }
+
   if (requireManager && !isManager) {
     return <Navigate to="/timesheet" replace />
   }
