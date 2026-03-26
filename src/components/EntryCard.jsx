@@ -1,8 +1,6 @@
 import StatusBadge from './StatusBadge'
-import { CATEGORIES, TIME_BLOCKS } from '../lib/constants'
 
 export default function EntryCard({ entry, onEdit, onDelete, readonly = false }) {
-  const timeBlock = TIME_BLOCKS.find((t) => t.value === entry.time_block)
   const canDelete = onDelete && !readonly
   const canEdit = onEdit && !readonly && entry.status !== 'signed_off'
 
@@ -33,8 +31,11 @@ export default function EntryCard({ entry, onEdit, onDelete, readonly = false })
 
       <div className="flex items-center gap-3 shrink-0">
         <span className="text-primary font-bold text-sm">
-          {entry.time_value ? Number(entry.time_value).toFixed(2) : '0.00'}d
+          {entry.time_hours ? `${Number(entry.time_hours)}hrs` : `${entry.time_value ? Number(entry.time_value).toFixed(2) : '0.00'}d`}
         </span>
+        {entry.time_hours && entry.time_value && (
+          <span className="text-on-surface-variant text-xs">({Number(entry.time_value).toFixed(2)}d)</span>
+        )}
 
         {(canEdit || canDelete) && (
           <div className={`flex items-center gap-2 transition-opacity ${entry.status === 'draft' || entry.status === 'returned' ? '' : 'opacity-0 group-hover/entry:opacity-100'}`}>

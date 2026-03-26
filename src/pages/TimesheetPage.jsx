@@ -7,6 +7,9 @@ import WeekCalendar from '../components/WeekCalendar'
 import {
   CATEGORIES,
   TIME_BLOCKS,
+  generateHourOptions,
+  hoursToDays,
+  hoursToTimeBlock,
   getCurrentWeekFriday,
   getWeekDates,
   generateReference,
@@ -20,6 +23,12 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects,
   const readonly = entry.status === 'signed_off' || entry.status === 'submitted'
   const errorStyle = { background: 'var(--color-surface-variant)', border: '1.5px solid rgba(255,113,108,0.6)' }
   const normalStyle = { background: 'var(--color-surface-variant)', border: 'none' }
+
+  // Get hours_per_day for the selected project
+  const selectedProject = userProjects.find((p) => p.id === entry.project_id)
+  const hoursPerDay = selectedProject?.hours_per_day
+  const hourOptions = generateHourOptions()
+  const dayEquivalent = entry.time_hours && hoursPerDay ? hoursToDays(entry.time_hours, hoursPerDay) : null
 
   return (
     <div className={`glass-card-inset rounded-xl p-5 relative group/entry ${readonly ? 'opacity-70' : ''}`}>
@@ -100,19 +109,29 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects,
         </div>
 
         <div>
-          <label className={`block text-[9px] font-bold uppercase tracking-widest mb-1.5 ${errors?.time_block ? 'text-error' : 'text-outline'}`}>Time Block {errors?.time_block && '— required'}</label>
-          <select
-            value={entry.time_block}
-            onChange={(e) => onChange(index, 'time_block', e.target.value)}
-            disabled={readonly}
-            className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
-            style={errors?.time_block ? errorStyle : normalStyle}
-          >
-            <option value="">Select time</option>
-            {TIME_BLOCKS.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </select>
+          <label className={`block text-[9px] font-bold uppercase tracking-widest mb-1.5 ${errors?.time_hours ? 'text-error' : 'text-outline'}`}>Hours {errors?.time_hours && '— required'}</label>
+          <div className="flex items-center gap-2">
+            <select
+              value={entry.time_hours || ''}
+              onChange={(e) => onChange(index, 'time_hours', e.target.value ? Number(e.target.value) : '')}
+              disabled={readonly || !entry.project_id}
+              className="w-full bg-surface-container-highest/50 border-transparent rounded-lg px-3 py-2 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none disabled:opacity-60"
+              style={errors?.time_hours ? errorStyle : normalStyle}
+            >
+              <option value="">{!entry.project_id ? 'Select project first' : 'Select hours'}</option>
+              {hourOptions.map((h) => (
+                <option key={h.value} value={h.value}>{h.label}</option>
+              ))}
+            </select>
+            {dayEquivalent !== null && (
+              <span className="text-xs text-on-surface-variant whitespace-nowrap font-medium" title={`${entry.time_hours}hrs / ${hoursPerDay}hrs per day = ${dayEquivalent}d`}>
+                = {dayEquivalent.toFixed(2)}d
+              </span>
+            )}
+          </div>
+          {!hoursPerDay && entry.project_id && (
+            <p className="text-[10px] text-amber-400 mt-1">Hours per day not set for this project. Ask an admin to configure it.</p>
+          )}
         </div>
 
         {category?.showReference && (
@@ -159,13 +178,18 @@ function EntryForm({ entry, onChange, onRemove, index, isExisting, userProjects,
 // ── Collapsible day section ──
 function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, userProjects, isNonWorking, onToggleNonWorking, validationErrors }) {
   const [open, setOpen] = useState(true)
+  const totalHours = entries.reduce((sum, e) => sum + (Number(e.time_hours) || 0), 0)
   const totalDays = entries.reduce((sum, e) => {
     if (e._id) {
-      // Existing entry — use stored time_value
+      // Existing entry — use stored time_value (already calculated)
       return sum + (Number(e.time_value) || 0)
     }
-    const tb = TIME_BLOCKS.find((t) => t.value === e.time_block)
-    return sum + (tb?.numericValue || 0)
+    // New entry — calculate from hours
+    const proj = userProjects.find((p) => p.id === e.project_id)
+    if (e.time_hours && proj?.hours_per_day) {
+      return sum + hoursToDays(e.time_hours, proj.hours_per_day)
+    }
+    return sum
   }, 0)
 
   const hasEditableEntries = entries.some((e) => e.status !== 'signed_off' && e.status !== 'submitted')
@@ -192,7 +216,10 @@ function DaySection({ day, entries, onAddEntry, onChangeEntry, onRemoveEntry, us
           {isNonWorking ? (
             <span className="text-purple-400 font-bold text-sm">Non-working day</span>
           ) : (
-            <span className="text-primary font-bold">{totalDays.toFixed(2)}d logged</span>
+            <span className="text-primary font-bold">
+              {totalHours > 0 ? `${totalHours}hrs` : '0hrs'}
+              {totalDays > 0 && <span className="text-on-surface-variant font-medium ml-1.5 text-sm">({totalDays.toFixed(2)}d)</span>}
+            </span>
           )}
           <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors">
             {open ? 'expand_more' : 'chevron_right'}
@@ -295,17 +322,20 @@ export default function TimesheetPage() {
   const [nwdChanged, setNwdChanged] = useState(false) // tracks if user toggled a non-working day
   const [validationErrors, setValidationErrors] = useState({}) // keyed by "date:index:field"
 
-  // Load user's assigned projects
+  // Load user's assigned projects (including hours_per_day from the assignment)
   useEffect(() => {
     if (!user?.id) return
     supabase
       .from('user_projects')
-      .select('project_id, projects(id, name, client, status)')
+      .select('project_id, hours_per_day, projects(id, name, client, status)')
       .eq('user_id', user.id)
       .then(({ data }) => {
         const active = (data || [])
-          .map((up) => up.projects)
-          .filter((p) => p && p.status === 'active')
+          .filter((up) => up.projects && up.projects.status === 'active')
+          .map((up) => ({
+            ...up.projects,
+            hours_per_day: up.hours_per_day ? Number(up.hours_per_day) : null,
+          }))
         setUserProjects(active)
       })
   }, [user?.id])
@@ -346,6 +376,7 @@ export default function TimesheetPage() {
             category: entry.category || '',
             time_block: entry.time_block || '',
             time_value: entry.time_value,
+            time_hours: entry.time_hours || '',
             feature_tag: entry.feature_tag || '',
             notes: entry.notes || '',
             project_id: entry.project_id || '',
@@ -384,7 +415,7 @@ export default function TimesheetPage() {
   function emptyEntry() {
     // Default to user's only project if they have exactly one
     const defaultProjectId = userProjects.length === 1 ? userProjects[0].id : ''
-    return { category: '', time_block: '', feature_tag: '', notes: '', project_id: defaultProjectId }
+    return { category: '', time_block: '', time_hours: '', feature_tag: '', notes: '', project_id: defaultProjectId }
   }
 
   function addEntry(date) {
@@ -406,10 +437,21 @@ export default function TimesheetPage() {
       // Don't allow editing submitted/signed_off entries
       if (entry?.status === 'signed_off' || entry?.status === 'submitted') return prev
       dayEntries[index] = { ...entry, [field]: value }
-      // If time_block changed on an existing entry, update the time_value too
-      if (field === 'time_block' && entry?._id) {
-        const tb = TIME_BLOCKS.find((t) => t.value === value)
-        if (tb) dayEntries[index].time_value = tb.numericValue
+      // If time_hours changed, recalculate time_value and time_block
+      if (field === 'time_hours' && value) {
+        const proj = userProjects.find((p) => p.id === (dayEntries[index].project_id))
+        if (proj?.hours_per_day) {
+          dayEntries[index].time_value = hoursToDays(Number(value), proj.hours_per_day)
+          dayEntries[index].time_block = hoursToTimeBlock(Number(value), proj.hours_per_day)
+        }
+      }
+      // If project changed, recalculate time_value from hours with new rate
+      if (field === 'project_id' && dayEntries[index].time_hours) {
+        const proj = userProjects.find((p) => p.id === value)
+        if (proj?.hours_per_day) {
+          dayEntries[index].time_value = hoursToDays(Number(dayEntries[index].time_hours), proj.hours_per_day)
+          dayEntries[index].time_block = hoursToTimeBlock(Number(dayEntries[index].time_hours), proj.hours_per_day)
+        }
       }
       return { ...prev, [date]: dayEntries }
     })
@@ -445,7 +487,7 @@ export default function TimesheetPage() {
         const key = (field) => `${day.date}:${idx}:${field}`
         if (!entry.project_id) errors[key('project_id')] = true
         if (!entry.category) errors[key('category')] = true
-        if (!entry.time_block) errors[key('time_block')] = true
+        if (!entry.time_hours) errors[key('time_hours')] = true
 
         const cat = CATEGORIES.find((c) => c.value === entry.category)
         if (cat?.showReference && !entry.feature_tag.trim()) errors[key('feature_tag')] = true
@@ -466,7 +508,7 @@ export default function TimesheetPage() {
     if (!entry._original) return false
     return (
       entry.category !== (entry._original.category || '') ||
-      entry.time_block !== (entry._original.time_block || '') ||
+      entry.time_hours !== (entry._original.time_hours || '') ||
       entry.feature_tag !== (entry._original.feature_tag || '') ||
       entry.notes !== (entry._original.notes || '') ||
       entry.project_id !== (entry._original.project_id || '')
@@ -498,14 +540,18 @@ export default function TimesheetPage() {
             }
           } else if (entry._id && isDirty(entry)) {
             // Update this existing entry
-            const tb = TIME_BLOCKS.find((t) => t.value === entry.time_block)
             const proj = userProjects.find((p) => p.id === entry.project_id)
+            const hrs = Number(entry.time_hours) || 0
+            const hpd = proj?.hours_per_day
+            const calculatedDays = hpd ? hoursToDays(hrs, hpd) : entry.time_value
+            const calculatedBlock = hpd ? hoursToTimeBlock(hrs, hpd) : entry.time_block
             updates.push({
               id: entry._id,
               changes: {
                 category: entry.category,
-                time_block: entry.time_block,
-                time_value: tb?.numericValue || entry.time_value,
+                time_hours: hrs || null,
+                time_block: calculatedBlock,
+                time_value: calculatedDays,
                 feature_tag: entry.feature_tag || null,
                 notes: entry.notes || null,
                 project_id: entry.project_id || null,
@@ -522,9 +568,12 @@ export default function TimesheetPage() {
       for (const day of visibleDays) {
         const dayEntries = entriesByDate[day.date] || []
         for (const entry of dayEntries) {
-          if (!entry._id && entry.category && entry.time_block) {
-            const tb = TIME_BLOCKS.find((t) => t.value === entry.time_block)
+          if (!entry._id && entry.category && entry.time_hours) {
             const entryProject = userProjects.find((p) => p.id === entry.project_id)
+            const hrs = Number(entry.time_hours)
+            const hpd = entryProject?.hours_per_day
+            const calculatedDays = hpd ? hoursToDays(hrs, hpd) : hrs
+            const calculatedBlock = hpd ? hoursToTimeBlock(hrs, hpd) : `${hrs} Hours`
             newRows.push({
               user_id: user.id,
               reference: generateReference(day.date, counter++),
@@ -534,8 +583,9 @@ export default function TimesheetPage() {
               day_name: day.dayName,
               entry_date: day.date,
               category: entry.category,
-              time_block: entry.time_block,
-              time_value: tb.numericValue,
+              time_hours: hrs,
+              time_block: calculatedBlock,
+              time_value: calculatedDays,
               feature_tag: entry.feature_tag || null,
               notes: entry.notes || null,
               status: 'draft',
@@ -599,12 +649,14 @@ export default function TimesheetPage() {
 
   // Calculate totals
   const allVisible = visibleDays.flatMap((day) => (entriesByDate[day.date] || []).filter((e) => !e._deleted))
+  const totalHoursAll = allVisible.reduce((sum, e) => sum + (Number(e.time_hours) || 0), 0)
   const totalDays = allVisible.reduce((sum, e) => {
     if (e._id) return sum + (Number(e.time_value) || 0)
-    const tb = TIME_BLOCKS.find((t) => t.value === e.time_block)
-    return sum + (tb?.numericValue || 0)
+    const proj = userProjects.find((p) => p.id === e.project_id)
+    if (e.time_hours && proj?.hours_per_day) return sum + hoursToDays(Number(e.time_hours), proj.hours_per_day)
+    return sum
   }, 0)
-  const newEntryCount = allVisible.filter((e) => !e._id && e.category && e.time_block).length
+  const newEntryCount = allVisible.filter((e) => !e._id && e.category && e.time_hours).length
   const dirtyCount = allVisible.filter((e) => e._id && isDirty(e)).length
   const deletedCount = visibleDays.reduce((sum, day) => {
     return sum + (entriesByDate[day.date] || []).filter((e) => e._deleted).length
@@ -698,7 +750,8 @@ export default function TimesheetPage() {
             <div className="flex flex-col">
               <span className="text-[10px] uppercase tracking-widest text-outline font-bold">Week total</span>
               <span className="text-on-surface-variant font-medium text-sm">
-                <span className="text-primary font-bold">{totalDays} days</span>
+                <span className="text-primary font-bold">{totalHoursAll}hrs</span>
+                <span className="text-on-surface-variant ml-1">({totalDays.toFixed(2)}d)</span>
                 {hasChanges && (
                   <span className="text-on-surface-variant ml-2">
                     ({[

@@ -1437,7 +1437,7 @@ function MonthlyProjectReport({ user }) {
 
     supabase
       .from('timesheet_entries')
-      .select('id, entry_date, week_ending, time_value, category, feature_tag, day_name, notes, status, profiles!user_id(full_name), projects(name, client)')
+      .select('id, entry_date, week_ending, time_value, time_hours, category, feature_tag, day_name, notes, status, profiles!user_id(full_name), projects(name, client)')
       .eq('project_id', selectedProject)
       .gte('entry_date', from)
       .lte('entry_date', to)
@@ -1450,15 +1450,17 @@ function MonthlyProjectReport({ user }) {
       })
   }, [selectedProject, monthStart, activeStatuses.join(',')])
 
-  // Group entries by week_ending, then aggregate categories
+  // Group entries by week_ending, then aggregate categories (both days and hours)
   const weekData = useMemo(() => {
     const weekMap = {}
     for (const e of entries) {
       const we = e.week_ending
-      if (!weekMap[we]) weekMap[we] = { weekEnding: we, categories: {}, total: 0 }
+      if (!weekMap[we]) weekMap[we] = { weekEnding: we, categories: {}, categoriesHours: {}, total: 0, totalHours: 0 }
       const cat = e.category || 'Other'
       weekMap[we].categories[cat] = (weekMap[we].categories[cat] || 0) + Number(e.time_value || 0)
+      weekMap[we].categoriesHours[cat] = (weekMap[we].categoriesHours[cat] || 0) + Number(e.time_hours || 0)
       weekMap[we].total += Number(e.time_value || 0)
+      weekMap[we].totalHours += Number(e.time_hours || 0)
     }
     return Object.values(weekMap).sort((a, b) => a.weekEnding.localeCompare(b.weekEnding))
   }, [entries])
@@ -1473,16 +1475,19 @@ function MonthlyProjectReport({ user }) {
   }, [weekData])
 
   const grandTotal = weekData.reduce((s, w) => s + w.total, 0)
+  const grandTotalHours = weekData.reduce((s, w) => s + w.totalHours, 0)
 
   // Aggregate by feature_tag / reference (monthly totals only)
   const referenceData = useMemo(() => {
     const refMap = {}
     for (const e of entries) {
       const ref = (e.feature_tag && e.feature_tag.trim()) ? e.feature_tag.trim() : 'Other'
-      if (!refMap[ref]) refMap[ref] = { reference: ref, total: 0, categories: {} }
+      if (!refMap[ref]) refMap[ref] = { reference: ref, total: 0, totalHours: 0, categories: {}, categoriesHours: {} }
       refMap[ref].total += Number(e.time_value || 0)
+      refMap[ref].totalHours += Number(e.time_hours || 0)
       const cat = e.category || 'Other'
       refMap[ref].categories[cat] = (refMap[ref].categories[cat] || 0) + Number(e.time_value || 0)
+      refMap[ref].categoriesHours[cat] = (refMap[ref].categoriesHours[cat] || 0) + Number(e.time_hours || 0)
     }
     // Sort with "Other" last, then alphabetically
     return Object.values(refMap).sort((a, b) => {
@@ -1517,6 +1522,7 @@ function MonthlyProjectReport({ user }) {
         client: selectedProjectObj.client || '',
         monthLabel,
         grandTotal,
+        grandTotalHours,
         totalWeeks,
         totalEntries,
         weekData,
@@ -1643,8 +1649,9 @@ function MonthlyProjectReport({ user }) {
           {/* Summary cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="glass-card rounded-xl p-4" style={{ background: 'rgba(0,201,255,0.06)', border: '1px solid rgba(0,201,255,0.15)' }}>
-              <p className="text-[9px] font-bold uppercase tracking-widest text-outline mb-1">Total days</p>
-              <span className="text-2xl font-heading font-black text-primary tabular-nums">{grandTotal.toFixed(1)}</span>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-outline mb-1">Total</p>
+              <span className="text-2xl font-heading font-black text-primary tabular-nums">{grandTotalHours > 0 ? `${grandTotalHours}hrs` : grandTotal.toFixed(1) + 'd'}</span>
+              {grandTotalHours > 0 && <p className="text-xs text-on-surface-variant mt-0.5">{grandTotal.toFixed(2)} days</p>}
             </div>
             <div className="glass-card rounded-xl p-4">
               <p className="text-[9px] font-bold uppercase tracking-widest text-outline mb-1">Weeks</p>
@@ -1673,7 +1680,8 @@ function MonthlyProjectReport({ user }) {
                     {allCategories.map((cat) => (
                       <th key={cat} className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-outline">{cat}</th>
                     ))}
-                    <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-primary">Total</th>
+                    <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-outline">Hours</th>
+                    <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-primary">Days</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1685,7 +1693,8 @@ function MonthlyProjectReport({ user }) {
                           {week.categories[cat] ? week.categories[cat].toFixed(1) + 'd' : '-'}
                         </td>
                       ))}
-                      <td className="text-right px-4 py-3 font-bold text-primary tabular-nums">{week.total.toFixed(1)}d</td>
+                      <td className="text-right px-4 py-3 tabular-nums text-on-surface-variant">{week.totalHours > 0 ? week.totalHours + 'h' : '-'}</td>
+                      <td className="text-right px-4 py-3 font-bold text-primary tabular-nums">{week.total.toFixed(2)}d</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1700,7 +1709,8 @@ function MonthlyProjectReport({ user }) {
                         </td>
                       )
                     })}
-                    <td className="text-right px-4 py-3 font-black text-primary tabular-nums">{grandTotal.toFixed(1)}d</td>
+                    <td className="text-right px-4 py-3 font-bold tabular-nums text-on-surface-variant">{grandTotalHours > 0 ? grandTotalHours + 'h' : '-'}</td>
+                    <td className="text-right px-4 py-3 font-black text-primary tabular-nums">{grandTotal.toFixed(2)}d</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1721,7 +1731,8 @@ function MonthlyProjectReport({ user }) {
                       {allCategories.map((cat) => (
                         <th key={cat} className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-outline">{cat}</th>
                       ))}
-                      <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-primary">Total</th>
+                      <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-outline">Hours</th>
+                      <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-primary">Days</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1733,7 +1744,8 @@ function MonthlyProjectReport({ user }) {
                             {ref.categories[cat] ? ref.categories[cat].toFixed(1) + 'd' : '-'}
                           </td>
                         ))}
-                        <td className="text-right px-4 py-3 font-bold text-primary tabular-nums">{ref.total.toFixed(1)}d</td>
+                        <td className="text-right px-4 py-3 tabular-nums text-on-surface-variant">{ref.totalHours > 0 ? ref.totalHours + 'h' : '-'}</td>
+                        <td className="text-right px-4 py-3 font-bold text-primary tabular-nums">{ref.total.toFixed(2)}d</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1748,7 +1760,8 @@ function MonthlyProjectReport({ user }) {
                           </td>
                         )
                       })}
-                      <td className="text-right px-4 py-3 font-black text-primary tabular-nums">{grandTotal.toFixed(1)}d</td>
+                      <td className="text-right px-4 py-3 font-bold tabular-nums text-on-surface-variant">{grandTotalHours > 0 ? grandTotalHours + 'h' : '-'}</td>
+                      <td className="text-right px-4 py-3 font-black text-primary tabular-nums">{grandTotal.toFixed(2)}d</td>
                     </tr>
                   </tfoot>
                 </table>

@@ -10,13 +10,45 @@ export const CATEGORIES = [
   { value: 'Other', label: 'Other', showReference: false, referencePlaceholder: '', requiresNotes: true },
 ]
 
-// Time block options
+// Legacy time block options (kept for backward compatibility with existing data)
 export const TIME_BLOCKS = [
   { value: 'Quarter Day', label: 'Quarter Day (0.25)', numericValue: 0.25 },
   { value: 'Half Day', label: 'Half Day (0.5)', numericValue: 0.5 },
   { value: 'Three Quarter Day', label: 'Three Quarter Day (0.75)', numericValue: 0.75 },
   { value: 'Day', label: 'Full Day (1)', numericValue: 1 },
 ]
+
+// Generate hour options in 0.5hr increments (0.5, 1.0, 1.5, ...)
+// No upper cap — users can log any amount of hours per entry
+export function generateHourOptions(maxHours = 24) {
+  const options = []
+  for (let h = 0.5; h <= maxHours; h += 0.5) {
+    options.push({ value: h, label: `${h} hr${h !== 1 ? 's' : ''}` })
+  }
+  return options
+}
+
+// Convert hours to days (rounded UP to nearest 0.25)
+export function hoursToDays(hours, hoursPerDay) {
+  if (!hours || !hoursPerDay || hoursPerDay <= 0) return 0
+  const rawDays = hours / hoursPerDay
+  return Math.ceil(rawDays * 4) / 4
+}
+
+// Format a day value for display (e.g. "0.25d")
+export function formatDays(days) {
+  return `${days.toFixed(2)}d`
+}
+
+// Get a human-readable time_block label from hours and hoursPerDay
+export function hoursToTimeBlock(hours, hoursPerDay) {
+  const days = hoursToDays(hours, hoursPerDay)
+  if (days === 0.25) return 'Quarter Day'
+  if (days === 0.5) return 'Half Day'
+  if (days === 0.75) return 'Three Quarter Day'
+  if (days === 1) return 'Day'
+  return `${days.toFixed(2)} Days`
+}
 
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 

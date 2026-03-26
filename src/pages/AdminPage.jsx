@@ -150,6 +150,7 @@ function ApprovalsTab() {
     const weekGroups = userEntries.reduce((g, e) => { (g[e.week_ending] ||= []).push(e); return g }, {})
     const sortedWeeks = Object.keys(weekGroups).sort()
     const totalDays = userEntries.reduce((sum, e) => sum + Number(e.time_value), 0)
+    const totalHours = userEntries.reduce((sum, e) => sum + Number(e.time_hours || 0), 0)
 
     async function handleSignOffWeek(weekEnding) {
       setActionLoading(true)
@@ -224,7 +225,7 @@ function ApprovalsTab() {
           </button>
           <div>
             <h2 className="font-headline font-black text-3xl text-on-surface">{selectedUser.userName}</h2>
-            <p className="text-base text-on-surface-variant">{getMonthLabel(monthStart)} · {totalDays} days total</p>
+            <p className="text-base text-on-surface-variant">{getMonthLabel(monthStart)} · {totalHours > 0 ? `${totalHours}hrs` : ''} {totalDays.toFixed(2)} days total</p>
           </div>
         </div>
 
@@ -249,7 +250,7 @@ function ApprovalsTab() {
                   {allSignedOff ? 'All weeks signed off' : `${userEntries.length} entries for this month`}
                 </p>
                 <p className="text-xs text-on-surface-variant">
-                  {sortedWeeks.length} {sortedWeeks.length === 1 ? 'week' : 'weeks'} · {totalDays} days total
+                  {sortedWeeks.length} {sortedWeeks.length === 1 ? 'week' : 'weeks'} · {totalHours > 0 ? `${totalHours}hrs` : ''} {totalDays.toFixed(2)} days total
                 </p>
               </div>
               {hasUnsignedSubmitted && (
@@ -710,9 +711,27 @@ function UsersTab() {
         const { error } = await supabase.from('user_projects').delete().eq('user_id', userId).eq('project_id', projectId)
         if (error) throw error
       } else {
+        // Don't insert yet — user needs to set hours_per_day first
+        // This is handled by the modal's assign flow
         const { error } = await supabase.from('user_projects').insert({ user_id: userId, project_id: projectId })
         if (error) throw error
       }
+      await loadData()
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message })
+    }
+  }
+
+  async function updateHoursPerDay(userId, projectId, hoursPerDay) {
+    try {
+      const value = parseFloat(hoursPerDay)
+      if (isNaN(value) || value <= 0) return
+      const { error } = await supabase
+        .from('user_projects')
+        .update({ hours_per_day: value })
+        .eq('user_id', userId)
+        .eq('project_id', projectId)
+      if (error) throw error
       await loadData()
     } catch (err) {
       setMessage({ type: 'error', text: err.message })
@@ -908,26 +927,47 @@ function UsersTab() {
         <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4" style={{ background: 'var(--modal-overlay)' }}>
           <div className="glass-card rounded-2xl w-full max-w-md p-6 space-y-4" style={{ background: 'var(--color-surface-container)' }}>
             <h3 className="font-headline font-bold text-xl text-on-surface">Projects for {assigningUser.full_name}</h3>
-            <p className="text-sm text-on-surface-variant">Toggle projects this user can log time against.</p>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            <p className="text-sm text-on-surface-variant">Toggle projects and set hours per day for each assignment.</p>
+            <div className="space-y-2 max-h-80 overflow-y-auto">
               {projects.filter((p) => p.status === 'active').map((project) => {
-                const isAssigned = userProjects.some((up) => up.user_id === assigningUser.id && up.project_id === project.id)
+                const assignment = userProjects.find((up) => up.user_id === assigningUser.id && up.project_id === project.id)
+                const isAssigned = !!assignment
                 return (
-                  <button
-                    key={project.id}
-                    onClick={() => toggleProjectAssignment(assigningUser.id, project.id, isAssigned)}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-left transition-colors ${
-                      isAssigned ? 'bg-primary/10 border border-primary/20' : 'bg-[var(--white-alpha-2)] border border-[var(--glass-border-subtle)]'
-                    }`}
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-on-surface">{project.name}</p>
-                      <p className="text-xs text-on-surface-variant">{project.client}</p>
-                    </div>
-                    <span className={`material-symbols-outlined ${isAssigned ? 'text-primary' : 'text-on-surface-variant'}`} style={{ fontSize: '20px' }}>
-                      {isAssigned ? 'check_circle' : 'radio_button_unchecked'}
-                    </span>
-                  </button>
+                  <div key={project.id} className={`rounded-xl transition-colors ${
+                    isAssigned ? 'bg-primary/10 border border-primary/20' : 'bg-[var(--white-alpha-2)] border border-[var(--glass-border-subtle)]'
+                  }`}>
+                    <button
+                      onClick={() => toggleProjectAssignment(assigningUser.id, project.id, isAssigned)}
+                      className="w-full flex items-center justify-between px-4 py-3 text-left"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-on-surface">{project.name}</p>
+                        <p className="text-xs text-on-surface-variant">{project.client}</p>
+                      </div>
+                      <span className={`material-symbols-outlined ${isAssigned ? 'text-primary' : 'text-on-surface-variant'}`} style={{ fontSize: '20px' }}>
+                        {isAssigned ? 'check_circle' : 'radio_button_unchecked'}
+                      </span>
+                    </button>
+                    {isAssigned && (
+                      <div className="px-4 pb-3 flex items-center gap-2">
+                        <label className="text-[9px] font-bold uppercase tracking-widest text-outline whitespace-nowrap">Hrs/day</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0.5"
+                          max="24"
+                          value={assignment.hours_per_day || ''}
+                          onChange={(e) => updateHoursPerDay(assigningUser.id, project.id, e.target.value)}
+                          placeholder="e.g. 7.5"
+                          className="w-24 bg-surface-container-highest/50 rounded-lg px-2 py-1.5 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
+                          style={{ background: 'var(--color-surface-variant)', border: !assignment.hours_per_day ? '1.5px solid rgba(255,113,108,0.5)' : '1px solid var(--glass-border)' }}
+                        />
+                        {!assignment.hours_per_day && (
+                          <span className="text-[10px] text-amber-400 font-medium">Required</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )
               })}
             </div>

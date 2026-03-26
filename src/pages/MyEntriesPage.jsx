@@ -4,24 +4,28 @@ import { useAuth } from '../hooks/useAuth'
 import { useEntries } from '../hooks/useEntries'
 import EntryCard from '../components/EntryCard'
 import StatusBadge from '../components/StatusBadge'
-import { CATEGORIES, TIME_BLOCKS, formatDate } from '../lib/constants'
+import { CATEGORIES, generateHourOptions, hoursToDays, hoursToTimeBlock, formatDate } from '../lib/constants'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 // Inline edit modal
 function EditModal({ entry, onSave, onCancel, saving }) {
   const [category, setCategory] = useState(entry.category)
-  const [timeBlock, setTimeBlock] = useState(entry.time_block)
+  const [timeHours, setTimeHours] = useState(entry.time_hours || '')
   const [featureTag, setFeatureTag] = useState(entry.feature_tag || '')
   const [notes, setNotes] = useState(entry.notes || '')
 
   const cat = CATEGORIES.find((c) => c.value === category)
+  const hourOptions = generateHourOptions()
 
+  // We don't have hours_per_day in this context, so we'll pass the raw hours
+  // and let the backend/caller handle the conversion if needed
   function handleSave() {
-    const tb = TIME_BLOCKS.find((t) => t.value === timeBlock)
+    const hrs = Number(timeHours) || 0
     onSave({
       category,
-      time_block: timeBlock,
-      time_value: tb?.numericValue || entry.time_value,
+      time_hours: hrs || null,
+      // time_value and time_block will need recalculating — but we don't have hours_per_day here
+      // Pass what we have; the caller should handle this
       feature_tag: featureTag || null,
       notes: notes || null,
     })
@@ -43,10 +47,11 @@ function EditModal({ entry, onSave, onCancel, saving }) {
         </div>
 
         <div>
-          <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Time</label>
-          <select value={timeBlock} onChange={(e) => setTimeBlock(e.target.value)} className="input-dark">
-            {TIME_BLOCKS.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
+          <label className="block text-[9px] font-bold uppercase tracking-widest text-outline mb-1.5">Hours</label>
+          <select value={timeHours} onChange={(e) => setTimeHours(e.target.value ? Number(e.target.value) : '')} className="input-dark">
+            <option value="">Select hours</option>
+            {hourOptions.map((h) => (
+              <option key={h.value} value={h.value}>{h.label}</option>
             ))}
           </select>
         </div>
@@ -90,6 +95,7 @@ function getWeekStatus(entries) {
 // Collapsible week card
 function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, onSubmit }) {
   const totalDays = entries.reduce((sum, e) => sum + Number(e.time_value), 0)
+  const totalHours = entries.reduce((sum, e) => sum + Number(e.time_hours || 0), 0)
   const weekStatus = getWeekStatus(entries)
   const hasDrafts = entries.some((e) => e.status === 'draft' || e.status === 'returned')
   const hasReturned = entries.some((e) => e.status === 'returned')
@@ -126,7 +132,7 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
               <StatusBadge status={weekStatus} />
             </div>
             <p className="text-on-surface-variant text-sm mt-0.5">
-              {projectNames} · {totalDays} days · {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+              {projectNames} · {totalHours > 0 ? `${totalHours}hrs` : `${totalDays}d`}{totalHours > 0 ? ` (${totalDays.toFixed(2)}d)` : ''} · {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
             </p>
           </div>
         </div>
@@ -193,6 +199,7 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
                     {sortedProjectKeys.map((projectKey) => {
                       const project = projectMap[projectKey]
                       const projectTotal = project.entries.reduce((sum, e) => sum + Number(e.time_value), 0)
+                      const projectHours = project.entries.reduce((sum, e) => sum + Number(e.time_hours || 0), 0)
 
                       return (
                         <div key={projectKey}>
@@ -202,7 +209,7 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
                               <span className="text-sm font-bold text-on-surface">{project.name}</span>
                               {project.client && <span className="text-outline text-xs">({project.client})</span>}
                             </div>
-                            <span className="text-primary font-bold text-xs">{projectTotal}d</span>
+                            <span className="text-primary font-bold text-xs">{projectHours > 0 ? `${projectHours}hrs (${projectTotal.toFixed(2)}d)` : `${projectTotal}d`}</span>
                           </div>
                           <div className="space-y-2">
                             {project.entries.map((entry) => (

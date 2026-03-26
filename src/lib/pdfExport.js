@@ -44,7 +44,7 @@ function fmtDate(dateStr) {
 
 /** Build the HTML string for the report (light theme, real fonts) */
 function buildReportHTML({
-  projectName, client, monthLabel, grandTotal, totalWeeks, totalEntries,
+  projectName, client, monthLabel, grandTotal, grandTotalHours, totalWeeks, totalEntries,
   weekData, allCategories, referenceData,
 }) {
   const primary = '#0891b2'   // cyan-600
@@ -64,13 +64,16 @@ function buildReportHTML({
   const tfLeft = `style="${cellH}padding:0 12px;text-align:left;font-size:12px;font-weight:700;color:${primary};font-family:'Montserrat',sans-serif"`
   const tf = `style="${cellH}padding:0 12px;text-align:right;font-size:12px;font-weight:700;color:${primary};font-family:'Nunito Sans',sans-serif"`
 
+  const hasHours = grandTotalHours > 0
+
   // Category table rows
   const catRows = weekData.map((w, i) => {
     const bg = i % 2 === 0 ? '#ffffff' : light
     const cells = allCategories.map(c =>
       `<td ${td}>${w.categories[c] ? w.categories[c].toFixed(1) : '-'}</td>`
     ).join('')
-    return `<tr style="background:${bg}"><td ${tdLeft}>${fmtDate(w.weekEnding)}</td>${cells}<td ${tdTotal}>${w.total.toFixed(1)}</td></tr>`
+    const hoursCell = hasHours ? `<td ${td}>${w.totalHours > 0 ? w.totalHours + 'h' : '-'}</td>` : ''
+    return `<tr style="background:${bg}"><td ${tdLeft}>${fmtDate(w.weekEnding)}</td>${cells}${hoursCell}<td ${tdTotal}>${w.total.toFixed(2)}</td></tr>`
   }).join('')
 
   const catFootCells = allCategories.map(c => {
@@ -84,7 +87,8 @@ function buildReportHTML({
     const cells = allCategories.map(c =>
       `<td ${td}>${r.categories[c] ? r.categories[c].toFixed(1) : '-'}</td>`
     ).join('')
-    return `<tr style="background:${bg}"><td ${tdLeft}>${r.reference}</td>${cells}<td ${tdTotal}>${r.total.toFixed(1)}</td></tr>`
+    const hoursCell = hasHours ? `<td ${td}>${r.totalHours > 0 ? r.totalHours + 'h' : '-'}</td>` : ''
+    return `<tr style="background:${bg}"><td ${tdLeft}>${r.reference}</td>${cells}${hoursCell}<td ${tdTotal}>${r.total.toFixed(2)}</td></tr>`
   }).join('')
 
   const refFootCells = allCategories.map(c => {
@@ -103,8 +107,9 @@ function buildReportHTML({
   <!-- Summary cards -->
   <div style="display:flex;gap:12px;margin-bottom:20px">
     <div style="flex:1;background:${light};border:2px solid ${accent};border-radius:8px;padding:10px 16px">
-      <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${mid};font-family:'Nunito Sans',sans-serif">Total Days</div>
-      <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:24px;color:${primary}">${grandTotal.toFixed(1)}</div>
+      <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${mid};font-family:'Nunito Sans',sans-serif">Total</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:800;font-size:24px;color:${primary}">${hasHours ? grandTotalHours + 'hrs' : grandTotal.toFixed(1) + 'd'}</div>
+      ${hasHours ? `<div style="font-size:11px;color:${mid};font-family:'Nunito Sans',sans-serif">${grandTotal.toFixed(2)} days</div>` : ''}
     </div>
     <div style="flex:1;background:${light};border-radius:8px;padding:10px 16px">
       <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${mid};font-family:'Nunito Sans',sans-serif">Weeks</div>
@@ -127,7 +132,8 @@ function buildReportHTML({
       <tr style="background:${headerBg}">
         <th ${thLeft}>Week Ending</th>
         ${allCategories.map(c => `<th ${th}>${c}</th>`).join('')}
-        <th style="${cellH}padding:0 12px;text-align:right;font-size:11px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif">Total</th>
+        ${hasHours ? `<th ${th}>Hours</th>` : ''}
+        <th style="${cellH}padding:0 12px;text-align:right;font-size:11px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif">Days</th>
       </tr>
     </thead>
     <tbody>${catRows}</tbody>
@@ -135,7 +141,8 @@ function buildReportHTML({
       <tr style="background:${light};border-top:2px solid ${border}">
         <td ${tfLeft}>Monthly Total</td>
         ${catFootCells}
-        <td ${tf}>${grandTotal.toFixed(1)}</td>
+        ${hasHours ? `<td ${tf}>${grandTotalHours}h</td>` : ''}
+        <td ${tf}>${grandTotal.toFixed(2)}</td>
       </tr>
     </tfoot>
   </table>
@@ -148,7 +155,8 @@ function buildReportHTML({
       <tr style="background:${headerBg}">
         <th ${thLeft}>Reference</th>
         ${allCategories.map(c => `<th ${th}>${c}</th>`).join('')}
-        <th style="${cellH}padding:0 12px;text-align:right;font-size:11px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif">Total</th>
+        ${hasHours ? `<th ${th}>Hours</th>` : ''}
+        <th style="${cellH}padding:0 12px;text-align:right;font-size:11px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.05em;font-family:'Nunito Sans',sans-serif">Days</th>
       </tr>
     </thead>
     <tbody>${refRows}</tbody>
@@ -156,7 +164,8 @@ function buildReportHTML({
       <tr style="background:${light};border-top:2px solid ${border}">
         <td ${tfLeft}>Total</td>
         ${refFootCells}
-        <td ${tf}>${grandTotal.toFixed(1)}</td>
+        ${hasHours ? `<td ${tf}>${grandTotalHours}h</td>` : ''}
+        <td ${tf}>${grandTotal.toFixed(2)}</td>
       </tr>
     </tfoot>
   </table>
