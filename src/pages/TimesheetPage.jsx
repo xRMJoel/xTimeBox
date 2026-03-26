@@ -513,7 +513,7 @@ export default function TimesheetPage() {
     )
   }
 
-  async function handleSubmit() {
+  async function handleSubmit({ skipNavigate = false } = {}) {
     const validationError = validate()
     if (validationError) {
       setSubmitStatus({ type: 'error', message: validationError })
@@ -621,7 +621,7 @@ export default function TimesheetPage() {
 
       setSubmitStatus({ type: 'success', message: parts.join(', ') + '.' })
       setNwdChanged(false)
-      navigate('/my-entries')
+      if (!skipNavigate) navigate('/my-entries')
       return true
     } catch (err) {
       setSubmitStatus({ type: 'error', message: err.message })
@@ -630,9 +630,9 @@ export default function TimesheetPage() {
   }
 
   async function handleSubmitWeek() {
-    // Save any pending changes first
+    // Save any pending changes first — skip navigate so we can submit the week after
     if (hasChanges) {
-      const saved = await handleSubmit()
+      const saved = await handleSubmit({ skipNavigate: true })
       if (!saved) return // validation or save failed
     }
 
