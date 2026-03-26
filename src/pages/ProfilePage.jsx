@@ -8,6 +8,7 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState(profile?.full_name || '')
   const [phone, setPhone] = useState(profile?.phone || '')
   const [company, setCompany] = useState(profile?.company || '')
+  const [newEmail, setNewEmail] = useState('')
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '')
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -20,6 +21,7 @@ export default function ProfilePage() {
     setFullName(profile?.full_name || '')
     setPhone(profile?.phone || '')
     setCompany(profile?.company || '')
+    setNewEmail('')
     setEditing(false)
     setMessage(null)
   }
@@ -30,8 +32,19 @@ export default function ProfilePage() {
     setMessage(null)
     try {
       await updateProfile({ full_name: fullName, phone, company })
-      setEditing(false)
-      setMessage({ type: 'success', text: 'Profile updated.' })
+
+      // If user entered a new email, request the change via Supabase Auth
+      const emailChanged = newEmail && newEmail.toLowerCase() !== user?.email?.toLowerCase()
+      if (emailChanged) {
+        const { error: emailErr } = await supabase.auth.updateUser({ email: newEmail })
+        if (emailErr) throw emailErr
+        setNewEmail('')
+        setEditing(false)
+        setMessage({ type: 'success', text: 'Profile updated. A confirmation link has been sent to your new email address -- click it to complete the change.' })
+      } else {
+        setEditing(false)
+        setMessage({ type: 'success', text: 'Profile updated.' })
+      }
     } catch (err) {
       setMessage({ type: 'error', text: err.message })
     } finally {
@@ -171,8 +184,10 @@ export default function ProfilePage() {
             </div>
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Email</label>
-              <input type="email" value={user?.email || ''} disabled className="input-dark w-full opacity-50 cursor-not-allowed" />
-              <p className="text-xs text-outline mt-1">Email cannot be changed here.</p>
+              <input type="email" value={newEmail || user?.email || ''} onChange={(e) => setNewEmail(e.target.value)} className="input-dark w-full" placeholder={user?.email} />
+              {newEmail && newEmail.toLowerCase() !== user?.email?.toLowerCase() && (
+                <p className="text-xs text-primary mt-1">A confirmation link will be sent to the new address when you save.</p>
+              )}
             </div>
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Phone Number</label>

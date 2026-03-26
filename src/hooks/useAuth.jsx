@@ -84,6 +84,17 @@ export function AuthProvider({ children }) {
 
         if (s?.user) {
           loadProfileInBackground(s.user.id) // Profile loads async
+
+          // Sync profiles.email when the user confirms an email change
+          if (event === 'USER_UPDATED' && s.user.email) {
+            supabase
+              .from('profiles')
+              .update({ email: s.user.email })
+              .eq('id', s.user.id)
+              .then(({ error }) => {
+                if (error) console.error('Failed to sync profile email:', error)
+              })
+          }
         } else {
           setProfile(undefined)
           profileRef.current = undefined
