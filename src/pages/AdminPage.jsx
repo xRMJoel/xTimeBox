@@ -148,7 +148,7 @@ function ApprovalsTab() {
       supabase.from('projects').select('*').eq('status', 'active').then((r) => r.data || []),
       fetchSignoffs(monthStart),
       supabase.from('non_working_days').select('user_id, entry_date').gte('entry_date', monthStart).lte('entry_date', monthEnd).then((r) => r.data || []),
-      supabase.from('profiles').select('id, full_name, email').then((r) => r.data || []),
+      supabase.from('profiles').select('id, full_name, email').is('deactivated_at', null).then((r) => r.data || []),
     ])
     setEntries(entriesData)
     setProjects(projectsData)
