@@ -20,10 +20,21 @@ function shiftMonth(monthStart, delta) {
 }
 
 // ── Collapsible week section for approval detail view with per-week sign-off ──
-function CollapsibleWeekAdmin({ weekEnding, weekEntries, weekTotal, isSignedOff, hasSubmitted, hasDrafts, onSignOff, onUnsignOff, onReturnWeek, onDeleteWeek, onDeleteEntry, actionLoading }) {
+function CollapsibleWeekAdmin({ weekEnding, weekEntries, weekTotal, isSignedOff, hasSubmitted, hasDrafts, onSignOff, onUnsignOff, onReturnWeek, onDeleteWeek, onDeleteEntry, actionLoading, nonWorkingDays = [] }) {
   const [open, setOpen] = useState(false)
   const dayGroups = weekEntries.reduce((g, e) => { (g[e.entry_date] ||= []).push(e); return g }, {})
-  const sortedDays = Object.keys(dayGroups).sort()
+
+  // Find non-working days that fall within this week (Mon–Fri of weekEnding)
+  const weDate = new Date(weekEnding + 'T12:00:00')
+  const weekStart = new Date(weDate)
+  weekStart.setDate(weDate.getDate() - 4) // Monday
+  const nwdInWeek = nonWorkingDays.filter((d) => {
+    return d >= weekStart.toISOString().slice(0, 10) && d <= weekEnding
+  })
+
+  // Merge NWD dates into the day list so they appear in order
+  const allDates = new Set([...Object.keys(dayGroups), ...nwdInWeek])
+  const sortedDays = [...allDates].sort()
 
   return (
     <div className={`glass-card rounded-2xl overflow-hidden ${isSignedOff ? 'ring-1 ring-green-400/20' : ''}`}>
@@ -84,14 +95,33 @@ function CollapsibleWeekAdmin({ weekEnding, weekEntries, weekTotal, isSignedOff,
       </button>
       {open && (
         <div className="divide-y divide-[var(--glass-border-subtle)]">
-          {sortedDays.map((date) => (
-            <div key={date} className="px-6 py-4">
-              <div className="text-base font-medium text-on-surface mb-2">{dayGroups[date][0].day_name}, {formatDate(date)}</div>
-              <div className="space-y-2">
-                {dayGroups[date].map((entry) => <EntryCard key={entry.id} entry={entry} onDelete={onDeleteEntry} />)}
+          {sortedDays.map((date) => {
+            const isNwd = nwdInWeek.includes(date)
+            const hasEntries = dayGroups[date] && dayGroups[date].length > 0
+            const dayName = hasEntries
+              ? dayGroups[date][0].day_name
+              : new Date(date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long' })
+
+            return (
+              <div key={date} className="px-6 py-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-base font-medium text-on-surface">{dayName}, {formatDate(date)}</span>
+                  {isNwd && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-amber-400 bg-amber-400/10 border border-amber-400/20">
+                      Non-working day
+                    </span>
+                  )}
+                </div>
+                {hasEntries ? (
+                  <div className="space-y-2">
+                    {dayGroups[date].map((entry) => <EntryCard key={entry.id} entry={entry} onDelete={onDeleteEntry} />)}
+                  </div>
+                ) : isNwd ? (
+                  <p className="text-sm text-on-surface-variant italic">No entries expected</p>
+                ) : null}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
@@ -180,6 +210,7 @@ function ApprovalsTab() {
     const sortedWeeks = Object.keys(weekGroups).sort()
     const totalDays = userEntries.reduce((sum, e) => sum + Number(e.time_value), 0)
     const totalHours = userEntries.reduce((sum, e) => sum + Number(e.time_hours || 0), 0)
+    const userNwdDates = nonWorkingDays.filter((n) => n.user_id === selectedUser.userId).map((n) => n.entry_date)
 
     async function handleSignOffWeek(weekEnding) {
       setActionLoading(true)
@@ -254,7 +285,7 @@ function ApprovalsTab() {
           </button>
           <div>
             <h2 className="font-headline font-black text-3xl text-on-surface">{selectedUser.userName}</h2>
-            <p className="text-base text-on-surface-variant">{getMonthLabel(monthStart)} · {totalHours > 0 ? `${totalHours}hrs` : ''} {totalDays.toFixed(2)} days total</p>
+            <p className="text-base text-on-surface-variant">{getMonthLabel(monthStart)} · {totalHours > 0 ? `${totalHours}hrs` : ''} {totalDays.toFixed(2)} days total{userNwdDates.length > 0 ? ` · ${userNwdDates.length} non-working ${userNwdDates.length === 1 ? 'day' : 'days'}` : ''}</p>
           </div>
         </div>
 
@@ -315,6 +346,7 @@ function ApprovalsTab() {
               onDeleteWeek={() => setDeletingWeek(weekEnding)}
               onDeleteEntry={handleDeleteEntry}
               actionLoading={actionLoading}
+              nonWorkingDays={userNwdDates}
             />
           )
         })}
