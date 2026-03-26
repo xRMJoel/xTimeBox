@@ -27,73 +27,40 @@ export function AuthProvider({ children }) {
     return { data, error: null }
   }
 
-  // Shared handler for processing a session (used by both getSession and onAuthStateChange)
-  async function handleSession(s) {
-    setSession(s)
-
-    if (s?.user) {
-      const result = await fetchProfile(s.user.id)
-      if (!result.error) {
-        if (result.data?.deactivated_at) {
-          setSession(null)
-          setProfile(null)
-          profileRef.current = null
-          setDeactivated(true)
-          try { await supabase.auth.signOut() } catch (_) {}
-          return
-        }
-        setProfile(result.data)
-        profileRef.current = result.data
-      } else {
-        // Fetch failed — always set profile to null so the app doesn't
-        // get stuck on "Loading your profile..." forever
-        console.error('Profile fetch failed, setting profile to null')
-        setProfile(null)
-        profileRef.current = null
-      }
-    } else {
-      setProfile(null)
-      profileRef.current = null
-    }
-  }
-
   useEffect(() => {
-    // Explicitly fetch the session on mount — don't rely solely on
-    // onAuthStateChange which may not fire reliably on every refresh
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      console.log('getSession resolved:', s ? 'session found' : 'no session')
-      if (!initialised.current) {
-        initialised.current = true
-        setSession(s)
-        setLoading(false) // Unblock the app immediately — profile loads in background
-        console.log('Auth initialised via getSession')
-        // Fetch profile in background (ProtectedRoute handles the undefined state)
-        if (s?.user) {
-          fetchProfile(s.user.id).then((result) => {
-            if (!result.error) {
-              if (result.data?.deactivated_at) {
-                setSession(null)
-                setProfile(null)
-                profileRef.current = null
-                setDeactivated(true)
-                supabase.auth.signOut().catch(() => {})
-                return
-              }
-              setProfile(result.data)
-              profileRef.current = result.data
-            } else {
-              console.error('Profile fetch failed, setting profile to null')
-              setProfile(null)
-              profileRef.current = null
-            }
-          })
+    // Get session on mount as the primary initialisation path
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+      if (initialised.current) return // onAuthStateChange already handled it
+
+      setSession(s)
+
+      if (s?.user) {
+        const result = await fetchProfile(s.user.id)
+        if (!result.error) {
+          if (result.data?.deactivated_at) {
+            setSession(null)
+            setProfile(null)
+            profileRef.current = null
+            setDeactivated(true)
+            try { await supabase.auth.signOut() } catch (_) {}
+            initialised.current = true
+            setLoading(false)
+            return
+          }
+          setProfile(result.data)
+          profileRef.current = result.data
         } else {
           setProfile(null)
           profileRef.current = null
         }
+      } else {
+        setProfile(null)
+        profileRef.current = null
       }
-    }).catch((err) => {
-      console.error('getSession failed:', err)
+
+      initialised.current = true
+      setLoading(false)
+    }).catch(() => {
       if (!initialised.current) {
         initialised.current = true
         setProfile(null)
@@ -102,22 +69,45 @@ export function AuthProvider({ children }) {
       }
     })
 
-    // Listen for subsequent auth changes (sign in, sign out, token refresh)
+    // Listen for auth changes (sign in, sign out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, s) => {
-        if (!initialised.current) {
-          // First event arrived before getSession resolved — use it
-          initialised.current = true
-          await handleSession(s)
-          setLoading(false)
+        setSession(s)
+
+        if (s?.user) {
+          const result = await fetchProfile(s.user.id)
+          if (!result.error) {
+            if (result.data?.deactivated_at) {
+              setSession(null)
+              setProfile(null)
+              profileRef.current = null
+              setDeactivated(true)
+              try { await supabase.auth.signOut() } catch (_) {}
+              if (!initialised.current) {
+                initialised.current = true
+                setLoading(false)
+              }
+              return
+            }
+            setProfile(result.data)
+            profileRef.current = result.data
+          } else if (profileRef.current === undefined) {
+            setProfile(null)
+            profileRef.current = null
+          }
         } else {
-          // Subsequent events (sign in/out, TOKEN_REFRESHED, etc.)
-          await handleSession(s)
+          setProfile(undefined)
+          profileRef.current = undefined
+        }
+
+        if (!initialised.current) {
+          initialised.current = true
+          setLoading(false)
         }
       }
     )
 
-    // Safety net: if neither getSession nor auth event resolves within 8 seconds
+    // Safety net: if neither path resolves within 5 seconds
     const safetyTimeout = setTimeout(() => {
       if (!initialised.current) {
         console.warn('Auth: no session resolved, proceeding as unauthenticated')
@@ -126,7 +116,7 @@ export function AuthProvider({ children }) {
         profileRef.current = null
         setLoading(false)
       }
-    }, 8000)
+    }, 5000)
 
     // Recover session when the tab becomes visible again
     function handleVisibilityChange() {
