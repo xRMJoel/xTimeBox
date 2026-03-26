@@ -2,12 +2,12 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
-import { getCurrentWeekFriday, getWeekDates, CATEGORIES, TIME_BLOCKS, generateReference, formatDate } from '../lib/constants'
+import { getCurrentWeekFriday, getWeekDates, getWorkingDaysInMonth, CATEGORIES, TIME_BLOCKS, generateReference, formatDate } from '../lib/constants'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function HomePage() {
   const { user, profile } = useAuth()
-  const [stats, setStats] = useState({ weekHours: 0, monthHours: 0, draftCount: 0, submittedCount: 0 })
+  const [stats, setStats] = useState({ weekDays: 0, monthDays: 0, missingCount: 0, draftCount: 0, submittedCount: 0, signedOffCount: 0, workingDays: 0 })
   const [weekEntries, setWeekEntries] = useState([])
   const [nonWorkingDays, setNonWorkingDays] = useState(new Set())
   const [initialLoad, setInitialLoad] = useState(true)
@@ -77,41 +77,45 @@ export default function HomePage() {
 
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
+    const today = now.toISOString().slice(0, 10)
 
-    const { data: weekData } = await supabase
-      .from('timesheet_entries')
-      .select('time_value')
-      .eq('user_id', user.id)
-      .eq('week_ending', weekEnding)
+    // Fetch all month entries + non-working days in parallel
+    const [weekResult, monthResult, nwdResult] = await Promise.all([
+      supabase.from('timesheet_entries').select('time_value').eq('user_id', user.id).eq('week_ending', weekEnding),
+      supabase.from('timesheet_entries').select('time_value, entry_date, status').eq('user_id', user.id).gte('entry_date', monthStart).lte('entry_date', monthEnd),
+      supabase.from('non_working_days').select('entry_date').eq('user_id', user.id).gte('entry_date', monthStart).lte('entry_date', monthEnd),
+    ])
 
-    const weekHours = (weekData || []).reduce((sum, e) => sum + Number(e.time_value || 0), 0)
+    const weekEntries = weekResult.data || []
+    const monthEntries = monthResult.data || []
+    const nwdDates = new Set((nwdResult.data || []).map((r) => r.entry_date))
 
-    const { data: monthData } = await supabase
-      .from('timesheet_entries')
-      .select('time_value')
-      .eq('user_id', user.id)
-      .gte('entry_date', monthStart)
-      .lte('entry_date', monthEnd)
+    const weekDays = weekEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0)
+    const monthDays = monthEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0)
 
-    const monthHours = (monthData || []).reduce((sum, e) => sum + Number(e.time_value || 0), 0)
+    // Working days = weekdays in month minus non-working days
+    const allWorkingDays = getWorkingDaysInMonth(now.getFullYear(), now.getMonth())
+    const workingDays = allWorkingDays.filter((d) => !nwdDates.has(d)).length
 
-    const { count: draftCount } = await supabase
-      .from('timesheet_entries')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('status', 'draft')
+    // Dates with at least one entry
+    const datesWithEntries = new Set(monthEntries.map((e) => e.entry_date))
 
-    const { count: submittedCount } = await supabase
-      .from('timesheet_entries')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('status', 'submitted')
+    // Missing = working days before today with no entries (exclude non-working days)
+    const missingCount = allWorkingDays.filter((d) => d < today && !nwdDates.has(d) && !datesWithEntries.has(d)).length
+
+    // Status counts for entries this month
+    const draftCount = monthEntries.filter((e) => e.status === 'draft').length
+    const submittedCount = monthEntries.filter((e) => e.status === 'submitted').length
+    const signedOffCount = monthEntries.filter((e) => e.status === 'signed_off').length
 
     return {
-      weekHours: Math.round(weekHours * 100) / 100,
-      monthHours: Math.round(monthHours * 100) / 100,
-      draftCount: draftCount || 0,
-      submittedCount: submittedCount || 0,
+      weekDays: Math.round(weekDays * 100) / 100,
+      monthDays: Math.round(monthDays * 100) / 100,
+      missingCount,
+      draftCount,
+      submittedCount,
+      signedOffCount,
+      workingDays,
     }
   }
 
@@ -216,34 +220,48 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* Right - stats 2x2 grid */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* Right - stats 3x2 grid */}
+        <div className="grid grid-cols-3 gap-3">
           <StatsCard
             label="This week"
-            value={initialLoad ? '...' : stats.weekHours}
+            value={initialLoad ? '...' : stats.weekDays}
             unit="days"
             subtitle={`w/e ${weekEndingLabel}`}
             colour="cyan"
           />
           <StatsCard
             label="This month"
-            value={initialLoad ? '...' : stats.monthHours}
+            value={initialLoad ? '...' : stats.monthDays}
             unit="days"
             subtitle={monthName}
             colour="purple"
           />
           <StatsCard
+            label="Missing"
+            value={initialLoad ? '...' : `${stats.missingCount}/${stats.workingDays}`}
+            unit="days"
+            subtitle="No entries logged"
+            colour={stats.missingCount > 0 ? 'red' : 'green'}
+          />
+          <StatsCard
             label="Draft"
-            value={initialLoad ? '...' : stats.draftCount}
+            value={initialLoad ? '...' : `${stats.draftCount}/${stats.workingDays}`}
             unit="entries"
             subtitle="Not yet submitted"
             colour="yellow"
           />
           <StatsCard
             label="Submitted"
-            value={initialLoad ? '...' : stats.submittedCount}
+            value={initialLoad ? '...' : `${stats.submittedCount}/${stats.workingDays}`}
             unit="entries"
             subtitle="Awaiting sign-off"
+            colour="cyan"
+          />
+          <StatsCard
+            label="Signed off"
+            value={initialLoad ? '...' : `${stats.signedOffCount}/${stats.workingDays}`}
+            unit="entries"
+            subtitle="Approved"
             colour="green"
           />
         </div>
@@ -325,6 +343,7 @@ function StatsCard({ label, value, unit, subtitle, colour }) {
     purple: { bg: 'rgba(182,133,255,0.06)', border: 'rgba(182,133,255,0.15)', text: 'text-secondary' },
     yellow: { bg: 'rgba(250,204,21,0.06)',  border: 'rgba(250,204,21,0.15)',  text: 'text-yellow-400' },
     green:  { bg: 'rgba(34,197,94,0.06)',   border: 'rgba(34,197,94,0.15)',   text: 'text-green-400' },
+    red:    { bg: 'rgba(255,113,108,0.06)', border: 'rgba(255,113,108,0.15)', text: 'text-error' },
   }
   const c = colours[colour] || colours.cyan
 

@@ -93,6 +93,20 @@ export function getWeekDates(weekEndingStr) {
   return dates
 }
 
+// Count weekdays (Mon-Fri) in a month, returning an array of date strings
+export function getWorkingDaysInMonth(year, month) {
+  const days = []
+  const lastDay = new Date(year, month + 1, 0).getDate()
+  for (let d = 1; d <= lastDay; d++) {
+    const date = new Date(year, month, d)
+    const dow = date.getDay()
+    if (dow >= 1 && dow <= 5) {
+      days.push(date.toISOString().slice(0, 10))
+    }
+  }
+  return days
+}
+
 // Format a date string nicely
 export function formatDate(dateStr) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', {

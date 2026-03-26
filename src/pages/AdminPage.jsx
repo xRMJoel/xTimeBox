@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useEntries, useSignoffs } from '../hooks/useEntries'
 import StatusBadge from '../components/StatusBadge'
 import EntryCard from '../components/EntryCard'
-import { formatDate, getMonthLabel } from '../lib/constants'
+import { formatDate, getMonthLabel, getCurrentWeekFriday, getWorkingDaysInMonth } from '../lib/constants'
 import { supabase } from '../lib/supabase'
 import LoadingSpinner from '../components/LoadingSpinner'
 
@@ -98,6 +98,28 @@ function CollapsibleWeekAdmin({ weekEnding, weekEntries, weekTotal, isSignedOff,
   )
 }
 
+// ── Mini stat card for admin user cards ──
+const MINI_COLOURS = {
+  cyan:   { bg: 'rgba(0,201,255,0.06)',   border: 'rgba(0,201,255,0.15)',   text: 'text-primary' },
+  purple: { bg: 'rgba(182,133,255,0.06)', border: 'rgba(182,133,255,0.15)', text: 'text-secondary' },
+  yellow: { bg: 'rgba(250,204,21,0.06)',  border: 'rgba(250,204,21,0.15)',  text: 'text-yellow-400' },
+  green:  { bg: 'rgba(34,197,94,0.06)',   border: 'rgba(34,197,94,0.15)',   text: 'text-green-400' },
+  red:    { bg: 'rgba(255,113,108,0.06)', border: 'rgba(255,113,108,0.15)', text: 'text-error' },
+}
+
+function AdminMiniCard({ label, value, unit, colour }) {
+  const c = MINI_COLOURS[colour] || MINI_COLOURS.cyan
+  return (
+    <div className="rounded-xl px-3 py-2.5" style={{ background: c.bg, border: `1px solid ${c.border}` }}>
+      <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-outline mb-1">{label}</p>
+      <span className={`text-lg font-heading font-black ${c.text}`} style={{ fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </span>
+      <span className="text-[10px] text-on-surface-variant ml-1">{unit}</span>
+    </div>
+  )
+}
+
 // ══════════════════════════════════════════════
 // TAB 1: APPROVALS — grouped by project then user
 // ══════════════════════════════════════════════
@@ -116,16 +138,23 @@ function ApprovalsTab() {
   const [returningWeek, setReturningWeek] = useState(null)
   const [returnReason, setReturnReason] = useState('')
   const [deletingWeek, setDeletingWeek] = useState(null)
+  const [nonWorkingDays, setNonWorkingDays] = useState([])
+  const [allProfiles, setAllProfiles] = useState([])
 
   const loadData = useCallback(async () => {
-    const [entriesData, projectsData, signoffsData] = await Promise.all([
+    const monthEnd = new Date(new Date(monthStart + 'T12:00:00').getFullYear(), new Date(monthStart + 'T12:00:00').getMonth() + 1, 0).toISOString().slice(0, 10)
+    const [entriesData, projectsData, signoffsData, nwdResult, profilesResult] = await Promise.all([
       fetchAllEntries({ monthStart }),
       supabase.from('projects').select('*').eq('status', 'active').then((r) => r.data || []),
       fetchSignoffs(monthStart),
+      supabase.from('non_working_days').select('user_id, entry_date').gte('entry_date', monthStart).lte('entry_date', monthEnd).then((r) => r.data || []),
+      supabase.from('profiles').select('id, full_name, email').then((r) => r.data || []),
     ])
     setEntries(entriesData)
     setProjects(projectsData)
     setSignoffs(signoffsData)
+    setNonWorkingDays(nwdResult)
+    setAllProfiles(profilesResult)
   }, [monthStart, fetchAllEntries, fetchSignoffs])
 
   useEffect(() => { loadData() }, [loadData])
@@ -346,7 +375,36 @@ function ApprovalsTab() {
     )
   }
 
-  // ── Main approval list grouped by project ──
+  // ── Compute per-user metrics ──
+  const monthDate = new Date(monthStart + 'T12:00:00')
+  const allWorkingDayDates = getWorkingDaysInMonth(monthDate.getFullYear(), monthDate.getMonth())
+  const today = new Date().toISOString().slice(0, 10)
+  const currentWeekFriday = getCurrentWeekFriday()
+
+  // Group non-working days by user
+  const nwdByUser = {}
+  for (const nwd of nonWorkingDays) {
+    if (!nwdByUser[nwd.user_id]) nwdByUser[nwd.user_id] = new Set()
+    nwdByUser[nwd.user_id].add(nwd.entry_date)
+  }
+
+  // Build full user list: include all profiles (even those with no entries)
+  const fullUserMap = {}
+  for (const p of allProfiles) {
+    fullUserMap[p.id] = { name: p.full_name || p.email || 'Unknown', email: p.email, entries: [] }
+  }
+  // Overlay entries
+  for (const entry of entries) {
+    const userId = entry.user_id
+    if (!fullUserMap[userId]) {
+      const userName = entry.profiles?.full_name || entry.profiles?.email || 'Unknown'
+      fullUserMap[userId] = { name: userName, email: entry.profiles?.email, entries: [] }
+    }
+    fullUserMap[userId].entries.push(entry)
+  }
+  const fullUserList = Object.entries(fullUserMap).sort(([, a], [, b]) => a.name.localeCompare(b.name))
+
+  // ── Main approval list with per-user cards ──
   return (
     <div className="space-y-6">
       {/* Month navigator */}
@@ -367,12 +425,12 @@ function ApprovalsTab() {
 
       {loading && entries.length === 0 && <LoadingSpinner message="Loading entries..." />}
 
-      {!loading && entries.length === 0 && (
+      {!loading && fullUserList.length === 0 && (
         <div className="glass-card rounded-2xl p-12 text-center">
           <div className="icon-badge-gradient w-14 h-14 mx-auto mb-4" style={{ borderRadius: '14px' }}>
             <span className="material-symbols-outlined text-white" style={{ fontSize: '28px' }}>event_busy</span>
           </div>
-          <p className="text-on-surface-variant text-base">No entries for {getMonthLabel(monthStart)}.</p>
+          <p className="text-on-surface-variant text-base">No users found.</p>
         </div>
       )}
 
@@ -386,37 +444,67 @@ function ApprovalsTab() {
         </div>
       )}
 
-      {/* User list */}
-      <div className="glass-card rounded-2xl overflow-hidden divide-y divide-[var(--glass-border-subtle)]">
-        {userList.map(([userId, userData]) => {
-          const userTotal = userData.entries.reduce((sum, e) => sum + Number(e.time_value), 0)
-          const userSignoff = signoffs.find((s) => s.user_id === userId)
+      {/* Per-user cards */}
+      <div className="space-y-4">
+        {fullUserList.map(([userId, userData]) => {
+          const userNwd = nwdByUser[userId] || new Set()
+          const workingDays = allWorkingDayDates.filter((d) => !userNwd.has(d)).length
+          const datesWithEntries = new Set(userData.entries.map((e) => e.entry_date))
+
+          // Days this week
+          const weekEntries = userData.entries.filter((e) => e.week_ending === currentWeekFriday)
+          const weekDays = weekEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0)
+
+          // Days this month
+          const monthDays = userData.entries.reduce((sum, e) => sum + Number(e.time_value || 0), 0)
+
+          // Missing = working days before today with no entries
+          const missingCount = allWorkingDayDates.filter((d) => d < today && !userNwd.has(d) && !datesWithEntries.has(d)).length
+
+          // Status counts
+          const draftCount = userData.entries.filter((e) => e.status === 'draft').length
+          const submittedCount = userData.entries.filter((e) => e.status === 'submitted').length
+          const signedOffCount = userData.entries.filter((e) => e.status === 'signed_off').length
+
+          // Overall status for badge
+          const allSignedOff = userData.entries.length > 0 && userData.entries.every((e) => e.status === 'signed_off')
           const hasSubmitted = userData.entries.some((e) => e.status === 'submitted')
           const hasReturned = userData.entries.some((e) => e.status === 'returned')
-          const allSignedOff = userData.entries.every((e) => e.status === 'signed_off')
-          const weekCount = new Set(userData.entries.map((e) => e.week_ending)).size
 
           return (
-            <div key={userId} className="px-6 py-4 flex items-center justify-between hover:bg-[var(--white-alpha-2)] transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full signature-gradient-bg flex items-center justify-center text-white text-sm font-bold">
-                  {userData.name.charAt(0).toUpperCase()}
+            <div key={userId} className="glass-card rounded-2xl p-5 hover:bg-[var(--white-alpha-2)] transition-colors">
+              {/* Header: name + status + review button */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full signature-gradient-bg flex items-center justify-center text-white text-sm font-bold">
+                    {userData.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="font-medium text-on-surface text-base">{userData.name}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-medium text-on-surface text-base">{userData.name}</div>
-                  <div className="text-sm text-on-surface-variant">{weekCount} {weekCount === 1 ? 'week' : 'weeks'} · {userTotal} days · {userData.entries.length} entries</div>
+                <div className="flex items-center gap-3">
+                  {allSignedOff ? <StatusBadge status="signed_off" />
+                    : hasReturned ? <StatusBadge status="returned" />
+                    : hasSubmitted ? <StatusBadge status="submitted" />
+                    : userData.entries.length > 0 ? <StatusBadge status="draft" />
+                    : null
+                  }
+                  <button onClick={() => setSelectedUser({ userId, userName: userData.name })}
+                    className="text-primary hover:text-primary-dim font-medium transition-colors flex items-center gap-1 text-sm">
+                    Review <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_forward</span>
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                {allSignedOff ? <StatusBadge status="signed_off" />
-                  : hasReturned ? <StatusBadge status="returned" />
-                  : hasSubmitted ? <StatusBadge status="submitted" />
-                  : <StatusBadge status="draft" />
-                }
-                <button onClick={() => setSelectedUser({ userId, userName: userData.name })}
-                  className="text-primary hover:text-primary-dim font-medium transition-colors flex items-center gap-1 text-sm">
-                  Review <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_forward</span>
-                </button>
+
+              {/* 6 metric cards in 3x2 grid */}
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                <AdminMiniCard label="This week" value={`${Math.round(weekDays * 100) / 100}`} unit="days" colour="cyan" />
+                <AdminMiniCard label="This month" value={`${Math.round(monthDays * 100) / 100}`} unit="days" colour="purple" />
+                <AdminMiniCard label="Missing" value={`${missingCount}/${workingDays}`} unit="days" colour={missingCount > 0 ? 'red' : 'green'} />
+                <AdminMiniCard label="Draft" value={`${draftCount}/${workingDays}`} unit="entries" colour="yellow" />
+                <AdminMiniCard label="Submitted" value={`${submittedCount}/${workingDays}`} unit="entries" colour="cyan" />
+                <AdminMiniCard label="Signed off" value={`${signedOffCount}/${workingDays}`} unit="entries" colour="green" />
               </div>
             </div>
           )
