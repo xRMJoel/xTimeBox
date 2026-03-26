@@ -591,6 +591,23 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
     setSuccess(false)
   }
 
+  async function handleDelete() {
+    if (!editingId) return
+    if (!confirm('Delete this entry? This cannot be undone.')) return
+    setSaving(true)
+    setError(null)
+    try {
+      const { error: err } = await supabase.from('timesheet_entries').delete().eq('id', editingId)
+      if (err) throw err
+      cancelEdit()
+      onSaved()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const category = CATEGORIES.find((c) => c.value === form.category)
   const timeBlock = TIME_BLOCKS.find((t) => t.value === form.time_block)
   const canSave = form.project_id && form.category && form.time_block
@@ -851,6 +868,13 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-4 pt-1">
+          {editingId && (
+            <button onClick={handleDelete} disabled={saving}
+              className="text-sm font-medium text-error hover:text-error-dim transition-colors flex items-center gap-1 mr-auto disabled:opacity-50">
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>delete</span>
+              Delete
+            </button>
+          )}
           {editingId ? (
             <button onClick={cancelEdit} className="text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors">Back to new</button>
           ) : (
