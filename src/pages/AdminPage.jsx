@@ -831,9 +831,8 @@ function UsersTab() {
         const { error } = await supabase.from('user_projects').delete().eq('user_id', userId).eq('project_id', projectId)
         if (error) throw error
       } else {
-        // Don't insert yet — user needs to set hours_per_day first
-        // This is handled by the modal's assign flow
-        const { error } = await supabase.from('user_projects').insert({ user_id: userId, project_id: projectId })
+        // Default hours_per_day to 5 — admin can adjust via the modal afterwards
+        const { error } = await supabase.from('user_projects').insert({ user_id: userId, project_id: projectId, hours_per_day: 5 })
         if (error) throw error
       }
       await loadData()
