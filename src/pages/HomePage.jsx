@@ -69,21 +69,19 @@ export default function HomePage() {
 
   async function fetchStats() {
     const now = new Date()
-    const day = now.getDay()
-    const diffToFri = day <= 5 ? 5 - day : 5 - day + 7
-    const friday = new Date(now)
-    friday.setDate(now.getDate() + diffToFri)
-    const weekEnding = friday.toISOString().split('T')[0]
+    const weekEnding = getCurrentWeekFriday()
 
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
-    const today = now.toISOString().slice(0, 10)
+    const year = now.getFullYear()
+    const month = now.getMonth()
+    const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`
+    const nextMonthStart = month === 11 ? `${year + 1}-01-01` : `${year}-${String(month + 2).padStart(2, '0')}-01`
+    const today = `${year}-${String(month + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
     // Fetch all month entries + non-working days in parallel
     const [weekResult, monthResult, nwdResult] = await Promise.all([
       supabase.from('timesheet_entries').select('time_value').eq('user_id', user.id).eq('week_ending', weekEnding),
-      supabase.from('timesheet_entries').select('time_value, entry_date, status').eq('user_id', user.id).gte('entry_date', monthStart).lte('entry_date', monthEnd),
-      supabase.from('non_working_days').select('entry_date').eq('user_id', user.id).gte('entry_date', monthStart).lte('entry_date', monthEnd),
+      supabase.from('timesheet_entries').select('time_value, entry_date, status').eq('user_id', user.id).gte('entry_date', monthStart).lt('entry_date', nextMonthStart),
+      supabase.from('non_working_days').select('entry_date').eq('user_id', user.id).gte('entry_date', monthStart).lt('entry_date', nextMonthStart),
     ])
 
     const weekEntries = weekResult.data || []
