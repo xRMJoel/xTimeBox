@@ -25,8 +25,9 @@ export default function WeekCalendar({ value, onChange, userId, highlightDates =
   // Entry metadata for the visible month
   const [entryDays, setEntryDays] = useState({})   // { 'YYYY-MM-DD': { total, statuses: Set } }
   const [weekStatuses, setWeekStatuses] = useState({}) // { 'YYYY-MM-DD' (friday): status }
+  const [nwdDates, setNwdDates] = useState(new Set()) // NWDs for visible month range
 
-  // When viewMonth changes, fetch entry data for that month range
+  // When viewMonth changes, fetch entry data and NWDs for that month range
   useEffect(() => {
     if (!userId) return
 
@@ -71,6 +72,17 @@ export default function WeekCalendar({ value, onChange, userId, highlightDates =
 
         setEntryDays(days)
         setWeekStatuses(weekStatus)
+      })
+
+    // Fetch NWDs for the same window
+    supabase
+      .from('non_working_days')
+      .select('entry_date')
+      .eq('user_id', userId)
+      .gte('entry_date', from)
+      .lte('entry_date', to)
+      .then(({ data }) => {
+        setNwdDates(new Set((data || []).map((r) => r.entry_date)))
       })
   }, [userId, viewYear, viewMonth])
 
@@ -229,7 +241,7 @@ export default function WeekCalendar({ value, onChange, userId, highlightDates =
                       const entry = entryDays[day.date]
                       const isToday = day.date === today
                       const isSelectedDay = day.date === value
-                      const isHighlighted = highlightDates.has(day.date)
+                      const isHighlighted = nwdDates.has(day.date) || highlightDates.has(day.date)
 
                       // Entry status colouring
                       let dotColour = null
