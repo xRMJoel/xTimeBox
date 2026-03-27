@@ -382,7 +382,7 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, onOpenDay, n
   const today = new Date().toISOString().slice(0, 10)
 
   // Overall week status
-  const totalLogged = weekEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0)
+  const totalLogged = Math.round(weekEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0) * 100) / 100
   const daysWithEntries = weekDays.filter((d) => (byDate[d.date] || []).length > 0).length
   const allSubmitted = weekEntries.length > 0 && weekEntries.every((e) => e.status === 'submitted' || e.status === 'signed_off')
   const hasReturned = weekEntries.some((e) => e.status === 'returned')
@@ -422,7 +422,7 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, onOpenDay, n
         <div className="space-y-2">
           {weekDays.map((day) => {
             const dayEntries = byDate[day.date] || []
-            const dayTotal = dayEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0)
+            const dayTotal = Math.round(dayEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0) * 100) / 100
             const isToday = day.date === today
             const isPast = day.date < today
             const hasEntries = dayEntries.length > 0
@@ -445,7 +445,7 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, onOpenDay, n
             const projectTotals = {}
             for (const e of dayEntries) {
               const name = e.projects?.name || 'Unassigned'
-              projectTotals[name] = (projectTotals[name] || 0) + Number(e.time_value || 0)
+              projectTotals[name] = Math.round(((projectTotals[name] || 0) + Number(e.time_value || 0)) * 100) / 100
             }
             const projectList = Object.entries(projectTotals) // [[name, total], ...]
 
