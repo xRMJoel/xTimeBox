@@ -215,7 +215,7 @@ function ApprovalsTab() {
     const userSignoff = signoffs.find((s) => s.user_id === selectedUser.userId)
     const weekGroups = userEntries.reduce((g, e) => { (g[e.week_ending] ||= []).push(e); return g }, {})
     const sortedWeeks = Object.keys(weekGroups).sort()
-    const totalDays = userEntries.reduce((sum, e) => sum + Number(e.time_value), 0)
+    const totalDays = Math.round(userEntries.reduce((sum, e) => sum + Number(e.time_value), 0) * 100) / 100
     const totalHours = userEntries.reduce((sum, e) => sum + Number(e.time_hours || 0), 0)
     const userNwdDates = nonWorkingDays.filter((n) => n.user_id === selectedUser.userId).map((n) => n.entry_date)
 
@@ -333,7 +333,7 @@ function ApprovalsTab() {
         {/* Weeks with per-week actions */}
         {sortedWeeks.map((weekEnding) => {
           const we = weekGroups[weekEnding]
-          const weekTotal = we.reduce((sum, e) => sum + Number(e.time_value), 0)
+          const weekTotal = Math.round(we.reduce((sum, e) => sum + Number(e.time_value), 0) * 100) / 100
           const weekSignedOff = we.every((e) => e.status === 'signed_off')
           const weekSubmitted = we.some((e) => e.status === 'submitted')
           const weekHasDrafts = we.some((e) => e.status === 'draft')
@@ -492,10 +492,10 @@ function ApprovalsTab() {
 
           // Days this week
           const weekEntries = userData.entries.filter((e) => e.week_ending === currentWeekFriday)
-          const weekDays = weekEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0)
+          const weekDays = Math.round(weekEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0) * 100) / 100
 
           // Days this month
-          const monthDays = userData.entries.reduce((sum, e) => sum + Number(e.time_value || 0), 0)
+          const monthDays = Math.round(userData.entries.reduce((sum, e) => sum + Number(e.time_value || 0), 0) * 100) / 100
 
           // Missing = working days before today with no entries
           const missingCount = allWorkingDayDates.filter((d) => d < today && !userNwd.has(d) && !datesWithEntries.has(d)).length

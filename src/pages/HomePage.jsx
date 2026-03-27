@@ -88,8 +88,8 @@ export default function HomePage() {
     const monthEntries = monthResult.data || []
     const nwdDates = new Set((nwdResult.data || []).map((r) => r.entry_date))
 
-    const weekDays = weekEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0)
-    const monthDays = monthEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0)
+    const weekDays = Math.round(weekEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0) * 100) / 100
+    const monthDays = Math.round(monthEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0) * 100) / 100
 
     // Working days = weekdays in month minus non-working days
     const allWorkingDays = getWorkingDaysInMonth(now.getFullYear(), now.getMonth())

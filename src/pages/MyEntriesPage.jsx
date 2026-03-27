@@ -227,7 +227,7 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
                     <div className="space-y-3">
                       {sortedProjectKeys.map((projectKey) => {
                         const project = projectMap[projectKey]
-                        const projectTotal = project.entries.reduce((sum, e) => sum + Number(e.time_value), 0)
+                        const projectTotal = Math.round(project.entries.reduce((sum, e) => sum + Number(e.time_value), 0) * 100) / 100
                         const projectHours = project.entries.reduce((sum, e) => sum + Number(e.time_hours || 0), 0)
 
                         return (
