@@ -703,7 +703,7 @@ export default function TimesheetPage() {
           <div className="mb-6">
             <div className="max-w-xs">
               <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Week ending (Friday)</label>
-              <WeekCalendar value={weekEnding} onChange={setWeekEnding} userId={user?.id} />
+              <WeekCalendar value={weekEnding} onChange={setWeekEnding} userId={user?.id} highlightDates={nonWorkingDays} />
             </div>
           </div>
           <div className="flex items-center gap-4">

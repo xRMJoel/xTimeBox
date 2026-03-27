@@ -11,9 +11,10 @@ const DAY_HEADERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
  * Props:
  *   value        – current week-ending date string (YYYY-MM-DD)
  *   onChange      – called with new YYYY-MM-DD when a Friday is selected
- *   userId        – user ID for fetching entry indicators
+ *   userId          – user ID for fetching entry indicators
+ *   highlightDates – Set of YYYY-MM-DD strings to mark with a purple dot (e.g. NWD)
  */
-export default function WeekCalendar({ value, onChange, userId }) {
+export default function WeekCalendar({ value, onChange, userId, highlightDates = new Set() }) {
   const [open, setOpen] = useState(false)
 
   // Display month — defaults to the month of the selected value
@@ -228,7 +229,7 @@ export default function WeekCalendar({ value, onChange, userId }) {
                       const entry = entryDays[day.date]
                       const isToday = day.date === today
                       const isSelectedDay = day.date === value
-                      const isFriday = day.d.getDay() === 5
+                      const isHighlighted = highlightDates.has(day.date)
 
                       // Entry status colouring
                       let dotColour = null
@@ -256,10 +257,15 @@ export default function WeekCalendar({ value, onChange, userId }) {
                           <span className={`text-xs tabular-nums ${day.outside ? 'text-on-surface-variant' : isSelectedDay ? 'text-primary font-bold' : 'text-on-surface'}`}>
                             {day.day}
                           </span>
-                          {/* Entry indicator dot */}
-                          {dotColour && !day.outside && (
-                            <div className="w-1.5 h-1.5 rounded-full mt-0.5" style={{ background: dotColour }} />
-                          )}
+                          {/* Status dots */}
+                          <div className="flex gap-0.5 mt-0.5 h-1.5">
+                            {dotColour && !day.outside && (
+                              <div className="w-1.5 h-1.5 rounded-full" style={{ background: dotColour }} />
+                            )}
+                            {isHighlighted && !day.outside && (
+                              <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#B685FF' }} />
+                            )}
+                          </div>
                         </button>
                       )
                     })}
@@ -281,6 +287,10 @@ export default function WeekCalendar({ value, onChange, userId }) {
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full" style={{ background: '#fbbf24' }} />
                 <span className="text-[10px] text-on-surface-variant">Returned</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full" style={{ background: '#B685FF' }} />
+                <span className="text-[10px] text-on-surface-variant">Non-working</span>
               </div>
             </div>
 
