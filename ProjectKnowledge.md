@@ -143,8 +143,9 @@ Migrations are numbered sequentially. The base schema is in `migration.sql`. All
 | 011 | Admin-only delete (restricted from resource_manager) |
 | 012 | Fixed get_admin_summary to include returned_count |
 | 013 | Server-side trigger to sync auth.users.email to profiles.email on email change confirmation |
+| 014 | Add `reason` column to `non_working_days` table |
 
-**Next migration number:** 014
+**Next migration number:** 015
 
 ---
 
