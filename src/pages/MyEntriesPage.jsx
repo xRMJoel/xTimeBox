@@ -98,7 +98,7 @@ function getWeekStatus(entries) {
 }
 
 // Collapsible week card
-function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, onSubmit, nonWorkingDays = new Set() }) {
+function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, onSubmit, nonWorkingDays = new Map() }) {
   const totalDaysRaw = entries.reduce((sum, e) => sum + Number(e.time_value), 0)
   const totalDays = roundDays(totalDaysRaw)
   const totalHours = Math.round(entries.reduce((sum, e) => sum + Number(e.time_hours || 0), 0) * 100) / 100
@@ -119,7 +119,7 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
   const weekStart = new Date(weDate)
   weekStart.setDate(weDate.getDate() - 4)
   const weekStartStr = weekStart.toISOString().slice(0, 10)
-  const nwdInWeek = [...nonWorkingDays].filter((d) => d >= weekStartStr && d <= weekEnding)
+  const nwdInWeek = [...nonWorkingDays.keys()].filter((d) => d >= weekStartStr && d <= weekEnding)
 
   // Merge NWD dates into the day list so they appear in order
   const allDates = new Set([...Object.keys(dayGroups), ...nwdInWeek])
@@ -219,7 +219,7 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
                     </span>
                     {isNwd && (
                       <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-amber-400 bg-amber-400/10 border border-amber-400/20">
-                        Non-working day
+                        {nonWorkingDays.get(date) || 'Non-working day'}
                       </span>
                     )}
                   </div>
@@ -277,7 +277,7 @@ export default function MyEntriesPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState(null)
   const [expandedWeeks, setExpandedWeeks] = useState(new Set())
-  const [nonWorkingDays, setNonWorkingDays] = useState(new Set())
+  const [nonWorkingDays, setNonWorkingDays] = useState(new Map())
 
   const loadEntries = useCallback(async () => {
     if (user?.id) {
@@ -287,9 +287,9 @@ export default function MyEntriesPage() {
       // Fetch non-working days for this user
       const { data: nwdData } = await supabase
         .from('non_working_days')
-        .select('entry_date')
+        .select('entry_date, reason')
         .eq('user_id', user.id)
-      setNonWorkingDays(new Set((nwdData || []).map((r) => r.entry_date)))
+      setNonWorkingDays(new Map((nwdData || []).map((r) => [r.entry_date, r.reason || 'Non-working day'])))
     }
   }, [user?.id, fetchUserEntries])
 

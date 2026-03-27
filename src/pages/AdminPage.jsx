@@ -20,7 +20,7 @@ function shiftMonth(monthStart, delta) {
 }
 
 // ── Collapsible week section for approval detail view with per-week sign-off ──
-function CollapsibleWeekAdmin({ weekEnding, weekEntries, weekTotal, isSignedOff, hasSubmitted, hasDrafts, onSignOff, onUnsignOff, onReturnWeek, onDeleteWeek, onDeleteEntry, actionLoading, nonWorkingDays = [] }) {
+function CollapsibleWeekAdmin({ weekEnding, weekEntries, weekTotal, isSignedOff, hasSubmitted, hasDrafts, onSignOff, onUnsignOff, onReturnWeek, onDeleteWeek, onDeleteEntry, actionLoading, nonWorkingDays = new Map() }) {
   const [open, setOpen] = useState(false)
   const dayGroups = weekEntries.reduce((g, e) => { (g[e.entry_date] ||= []).push(e); return g }, {})
 
@@ -28,7 +28,7 @@ function CollapsibleWeekAdmin({ weekEnding, weekEntries, weekTotal, isSignedOff,
   const weDate = new Date(weekEnding + 'T12:00:00')
   const weekStart = new Date(weDate)
   weekStart.setDate(weDate.getDate() - 4) // Monday
-  const nwdInWeek = nonWorkingDays.filter((d) => {
+  const nwdInWeek = [...nonWorkingDays.keys()].filter((d) => {
     return d >= weekStart.toISOString().slice(0, 10) && d <= weekEnding
   })
 
@@ -108,7 +108,7 @@ function CollapsibleWeekAdmin({ weekEnding, weekEntries, weekTotal, isSignedOff,
                   <span className="text-base font-medium text-on-surface">{dayName}, {formatDate(date)}</span>
                   {isNwd && (
                     <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-amber-400 bg-amber-400/10 border border-amber-400/20">
-                      Non-working day
+                      {nonWorkingDays.get(date) || 'Non-working day'}
                     </span>
                   )}
                 </div>
@@ -177,7 +177,7 @@ function ApprovalsTab() {
       fetchAllEntries({ monthStart }),
       supabase.from('projects').select('*').eq('status', 'active').then((r) => r.data || []),
       fetchSignoffs(monthStart),
-      supabase.from('non_working_days').select('user_id, entry_date').gte('entry_date', monthStart).lte('entry_date', monthEnd).then((r) => r.data || []),
+      supabase.from('non_working_days').select('user_id, entry_date, reason').gte('entry_date', monthStart).lte('entry_date', monthEnd).then((r) => r.data || []),
       supabase.from('profiles').select('id, full_name, email').is('deactivated_at', null).then((r) => r.data || []),
     ])
 
@@ -217,7 +217,8 @@ function ApprovalsTab() {
     const sortedWeeks = Object.keys(weekGroups).sort()
     const totalDays = Math.round(userEntries.reduce((sum, e) => sum + Number(e.time_value), 0) * 100) / 100
     const totalHours = userEntries.reduce((sum, e) => sum + Number(e.time_hours || 0), 0)
-    const userNwdDates = nonWorkingDays.filter((n) => n.user_id === selectedUser.userId).map((n) => n.entry_date)
+    const userNwdMap = new Map(nonWorkingDays.filter((n) => n.user_id === selectedUser.userId).map((n) => [n.entry_date, n.reason || 'Non-working day']))
+    const userNwdDates = [...userNwdMap.keys()]
 
     async function handleSignOffWeek(weekEnding) {
       setActionLoading(true)
@@ -353,7 +354,7 @@ function ApprovalsTab() {
               onDeleteWeek={() => setDeletingWeek(weekEnding)}
               onDeleteEntry={handleDeleteEntry}
               actionLoading={actionLoading}
-              nonWorkingDays={userNwdDates}
+              nonWorkingDays={userNwdMap}
             />
           )
         })}

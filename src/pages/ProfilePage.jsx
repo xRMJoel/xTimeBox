@@ -1,6 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
+
+const NWD_REASONS = ['Holiday', 'Training', 'Sick Leave', 'Personal', 'Bank Holiday', 'Other']
 
 export default function ProfilePage() {
   const { profile, user, updateProfile } = useAuth()
@@ -16,6 +18,79 @@ export default function ProfilePage() {
   const [message, setMessage] = useState(null)
   const [showAvatarDialog, setShowAvatarDialog] = useState(false)
   const fileInputRef = useRef(null)
+
+  // Non-working days state
+  const [nwdList, setNwdList] = useState([])
+  const [nwdDate, setNwdDate] = useState('')
+  const [nwdReason, setNwdReason] = useState('Holiday')
+  const [nwdCustomReason, setNwdCustomReason] = useState('')
+  const [nwdAdding, setNwdAdding] = useState(false)
+  const [nwdLoading, setNwdLoading] = useState(true)
+
+  const loadNonWorkingDays = useCallback(async () => {
+    if (!user?.id) return
+    setNwdLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('non_working_days')
+        .select('id, entry_date, reason')
+        .eq('user_id', user.id)
+        .order('entry_date', { ascending: false })
+      if (error) throw error
+      setNwdList(data || [])
+    } catch (err) {
+      console.error('Failed to load non-working days:', err)
+    } finally {
+      setNwdLoading(false)
+    }
+  }, [user?.id])
+
+  useEffect(() => { loadNonWorkingDays() }, [loadNonWorkingDays])
+
+  async function handleAddNwd(e) {
+    e.preventDefault()
+    if (!nwdDate || !user?.id) return
+    const reason = nwdReason === 'Other' ? nwdCustomReason.trim() : nwdReason
+    if (!reason) { setMessage({ type: 'error', text: 'Please enter a reason.' }); return }
+
+    // Check for weekend
+    const dayOfWeek = new Date(nwdDate + 'T12:00:00').getDay()
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      setMessage({ type: 'error', text: 'Weekends cannot be marked as non-working days.' })
+      return
+    }
+
+    // Check for duplicate
+    if (nwdList.some((d) => d.entry_date === nwdDate)) {
+      setMessage({ type: 'error', text: 'That date is already marked as a non-working day.' })
+      return
+    }
+
+    setNwdAdding(true)
+    setMessage(null)
+    try {
+      const { error } = await supabase.from('non_working_days').insert({ user_id: user.id, entry_date: nwdDate, reason })
+      if (error) throw error
+      setNwdDate('')
+      setNwdCustomReason('')
+      await loadNonWorkingDays()
+      setMessage({ type: 'success', text: 'Non-working day added.' })
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message })
+    } finally {
+      setNwdAdding(false)
+    }
+  }
+
+  async function handleDeleteNwd(id) {
+    try {
+      const { error } = await supabase.from('non_working_days').delete().eq('id', id)
+      if (error) throw error
+      setNwdList((prev) => prev.filter((d) => d.id !== id))
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message })
+    }
+  }
 
   function resetForm() {
     setFullName(profile?.full_name || '')
@@ -244,6 +319,88 @@ export default function ProfilePage() {
             <p className="text-base text-on-surface">{profile?.default_client || 'Not set'}</p>
           </div>
         </div>
+      </div>
+
+      {/* Non-working days */}
+      <div className="glass-card rounded-2xl p-8 space-y-5">
+        <div className="flex items-center gap-3">
+          <div className="icon-badge-gradient w-8 h-8" style={{ borderRadius: '8px' }}>
+            <span className="material-symbols-outlined text-white" style={{ fontSize: '18px' }}>event_busy</span>
+          </div>
+          <h3 className="font-headline font-bold text-xl text-on-surface">Non-Working Days</h3>
+        </div>
+
+        <form onSubmit={handleAddNwd} className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Date</label>
+            <input
+              type="date"
+              value={nwdDate}
+              onChange={(e) => setNwdDate(e.target.value)}
+              required
+              className="input-dark w-full"
+            />
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Reason</label>
+            <select
+              value={nwdReason}
+              onChange={(e) => setNwdReason(e.target.value)}
+              className="input-dark w-full"
+            >
+              {NWD_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          {nwdReason === 'Other' && (
+            <div className="flex-1 min-w-[160px]">
+              <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Specify</label>
+              <input
+                type="text"
+                value={nwdCustomReason}
+                onChange={(e) => setNwdCustomReason(e.target.value)}
+                placeholder="e.g. Doctor appointment"
+                className="input-dark w-full"
+                required
+              />
+            </div>
+          )}
+          <button type="submit" disabled={nwdAdding} className="btn-gradient text-sm disabled:opacity-50 whitespace-nowrap">
+            {nwdAdding ? 'Adding...' : 'Add day'}
+          </button>
+        </form>
+
+        {/* NWD list */}
+        {nwdLoading ? (
+          <p className="text-sm text-on-surface-variant">Loading...</p>
+        ) : nwdList.length === 0 ? (
+          <p className="text-sm text-on-surface-variant">No non-working days recorded.</p>
+        ) : (
+          <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
+            {nwdList.map((nwd) => {
+              const d = new Date(nwd.entry_date + 'T12:00:00')
+              const label = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+              const isPast = nwd.entry_date < new Date().toISOString().slice(0, 10)
+              return (
+                <div key={nwd.id} className={`flex items-center justify-between py-2 px-3 rounded-lg ${isPast ? 'opacity-50' : ''}`} style={{ background: 'var(--glass-bg)' }}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-on-surface font-medium">{label}</span>
+                    <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-purple-400 bg-purple-400/10 border border-purple-400/20">
+                      {nwd.reason || 'Non-working day'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteNwd(nwd.id)}
+                    className="text-on-surface-variant hover:text-error transition-colors p-1"
+                    title="Remove"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>close</span>
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Avatar upload dialogue */}

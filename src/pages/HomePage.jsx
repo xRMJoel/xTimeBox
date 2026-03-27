@@ -9,7 +9,7 @@ export default function HomePage() {
   const { user, profile } = useAuth()
   const [stats, setStats] = useState({ weekDays: 0, monthDays: 0, missingCount: 0, draftCount: 0, submittedCount: 0, signedOffCount: 0, workingDays: 0 })
   const [weekEntries, setWeekEntries] = useState([])
-  const [nonWorkingDays, setNonWorkingDays] = useState(new Set())
+  const [nonWorkingDays, setNonWorkingDays] = useState(new Map())
   const [initialLoad, setInitialLoad] = useState(true)
   const fetchIdRef = useRef(0)
   const [modalDay, setModalDay] = useState(null) // lifted from WeekAtAGlance for correct fixed positioning
@@ -134,12 +134,12 @@ export default function HomePage() {
     const dates = getWeekDates(weekEnding)
     const { data } = await supabase
       .from('non_working_days')
-      .select('entry_date')
+      .select('entry_date, reason')
       .eq('user_id', user.id)
       .gte('entry_date', dates[0].date)
       .lte('entry_date', dates[dates.length - 1].date)
 
-    return new Set((data || []).map((r) => r.entry_date))
+    return new Map((data || []).map((r) => [r.entry_date, r.reason || 'Non-working day']))
   }
 
   async function toggleNonWorkingDay(date) {
@@ -147,10 +147,10 @@ export default function HomePage() {
     const isNwd = nonWorkingDays.has(date)
     if (isNwd) {
       await supabase.from('non_working_days').delete().eq('user_id', user.id).eq('entry_date', date)
-      setNonWorkingDays((prev) => { const next = new Set(prev); next.delete(date); return next })
+      setNonWorkingDays((prev) => { const next = new Map(prev); next.delete(date); return next })
     } else {
       await supabase.from('non_working_days').insert({ user_id: user.id, entry_date: date })
-      setNonWorkingDays((prev) => new Set(prev).add(date))
+      setNonWorkingDays((prev) => new Map(prev).set(date, 'Non-working day'))
     }
   }
 
@@ -478,7 +478,7 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, onOpenDay, n
                 {/* Project breakdown or gap message */}
                 <div className="flex-1 min-w-0">
                   {isNwd ? (
-                    <p className="text-sm text-purple-400/70 italic">Non-working day</p>
+                    <p className="text-sm text-purple-400/70 italic">{nonWorkingDays.get(day.date) || 'Non-working day'}</p>
                   ) : hasEntries ? (
                     <div className="flex flex-wrap gap-x-4 gap-y-0.5">
                       {projectList.map(([name, total]) => (
