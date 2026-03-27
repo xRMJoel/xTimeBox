@@ -173,18 +173,25 @@ function ApprovalsTab() {
 
   const loadData = useCallback(async () => {
     const monthEnd = new Date(new Date(monthStart + 'T12:00:00').getFullYear(), new Date(monthStart + 'T12:00:00').getMonth() + 1, 0).toISOString().slice(0, 10)
-    const [entriesData, projectsData, signoffsData, nwdResult, profilesResult] = await Promise.all([
+    const results = await Promise.allSettled([
       fetchAllEntries({ monthStart }),
       supabase.from('projects').select('*').eq('status', 'active').then((r) => r.data || []),
       fetchSignoffs(monthStart),
       supabase.from('non_working_days').select('user_id, entry_date').gte('entry_date', monthStart).lte('entry_date', monthEnd).then((r) => r.data || []),
       supabase.from('profiles').select('id, full_name, email').is('deactivated_at', null).then((r) => r.data || []),
     ])
-    setEntries(entriesData)
-    setProjects(projectsData)
-    setSignoffs(signoffsData)
-    setNonWorkingDays(nwdResult)
-    setAllProfiles(profilesResult)
+
+    const [entriesResult, projectsResult, signoffsResult, nwdResult, profilesResult] = results
+    setEntries(entriesResult.status === 'fulfilled' ? entriesResult.value : [])
+    setProjects(projectsResult.status === 'fulfilled' ? projectsResult.value : [])
+    setSignoffs(signoffsResult.status === 'fulfilled' ? signoffsResult.value : [])
+    setNonWorkingDays(nwdResult.status === 'fulfilled' ? nwdResult.value : [])
+    setAllProfiles(profilesResult.status === 'fulfilled' ? profilesResult.value : [])
+
+    const failures = results.filter((r) => r.status === 'rejected')
+    if (failures.length > 0) {
+      setMessage({ type: 'error', text: `Some data failed to load. ${failures.length} request(s) failed.` })
+    }
   }, [monthStart, fetchAllEntries, fetchSignoffs])
 
   useEffect(() => { loadData() }, [loadData])

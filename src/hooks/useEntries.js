@@ -64,34 +64,49 @@ export function useEntries() {
     }
   }, [])
 
-  // Fetch all entries (admin view)
+  // Fetch all entries (admin view) with pagination to avoid Supabase's
+  // default 1,000-row limit silently truncating results.
   const fetchAllEntries = useCallback(async (options = {}) => {
     setLoading(true)
     setError(null)
     try {
-      let query = supabase
-        .from('timesheet_entries')
-        .select(`
-          *,
-          profiles:user_id (full_name, email)
-        `)
-        .order('entry_date', { ascending: false })
+      const PAGE_SIZE = 500
+      let allData = []
+      let from = 0
+      let hasMore = true
 
-      if (options.monthStart) {
-        const monthEnd = new Date(options.monthStart + 'T12:00:00')
-        monthEnd.setMonth(monthEnd.getMonth() + 1)
-        query = query
-          .gte('entry_date', options.monthStart)
-          .lt('entry_date', monthEnd.toISOString().slice(0, 10))
+      while (hasMore) {
+        let query = supabase
+          .from('timesheet_entries')
+          .select(`
+            *,
+            profiles:user_id (full_name, email)
+          `)
+          .order('entry_date', { ascending: false })
+          .range(from, from + PAGE_SIZE - 1)
+
+        if (options.monthStart) {
+          const monthEnd = new Date(options.monthStart + 'T12:00:00')
+          monthEnd.setMonth(monthEnd.getMonth() + 1)
+          query = query
+            .gte('entry_date', options.monthStart)
+            .lt('entry_date', monthEnd.toISOString().slice(0, 10))
+        }
+
+        if (options.userId) {
+          query = query.eq('user_id', options.userId)
+        }
+
+        const { data, error: err } = await query
+        if (err) throw err
+
+        const rows = data || []
+        allData = allData.concat(rows)
+        hasMore = rows.length === PAGE_SIZE
+        from += PAGE_SIZE
       }
 
-      if (options.userId) {
-        query = query.eq('user_id', options.userId)
-      }
-
-      const { data, error: err } = await query
-      if (err) throw err
-      return data || []
+      return allData
     } catch (e) {
       setError(e.message)
       return []
