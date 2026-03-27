@@ -22,11 +22,12 @@ export default function ProfilePage() {
 
   // Non-working days state
   const [nwdList, setNwdList] = useState([])
-  const [nwdDate, setNwdDate] = useState('')
+  const [nwdDateRange, setNwdDateRange] = useState({ start: '', end: '' })
   const [nwdReason, setNwdReason] = useState('Holiday')
   const [nwdCustomReason, setNwdCustomReason] = useState('')
   const [nwdAdding, setNwdAdding] = useState(false)
   const [nwdLoading, setNwdLoading] = useState(true)
+  const [nwdConflict, setNwdConflict] = useState(null) // { draftDates, blockedDates, pendingDates, reason }
 
   const loadNonWorkingDays = useCallback(async () => {
     if (!user?.id) return
@@ -48,38 +49,149 @@ export default function ProfilePage() {
 
   useEffect(() => { loadNonWorkingDays() }, [loadNonWorkingDays])
 
+  // Expand a date range to an array of weekday YYYY-MM-DD strings
+  function expandRange(start, end) {
+    const dates = []
+    const endStr = end || start
+    const d = new Date(start + 'T12:00:00')
+    const last = new Date(endStr + 'T12:00:00')
+    while (d <= last) {
+      const dow = d.getDay()
+      if (dow !== 0 && dow !== 6) dates.push(d.toISOString().slice(0, 10))
+      d.setDate(d.getDate() + 1)
+    }
+    return dates
+  }
+
   async function handleAddNwd(e) {
     e.preventDefault()
-    if (!nwdDate || !user?.id) return
+    if (!nwdDateRange.start || !user?.id) return
     const reason = nwdReason === 'Other' ? nwdCustomReason.trim() : nwdReason
     if (!reason) { setMessage({ type: 'error', text: 'Please enter a reason.' }); return }
 
-    // Check for weekend
-    const dayOfWeek = new Date(nwdDate + 'T12:00:00').getDay()
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      setMessage({ type: 'error', text: 'Weekends cannot be marked as non-working days.' })
+    const allDates = expandRange(nwdDateRange.start, nwdDateRange.end)
+    if (allDates.length === 0) { setMessage({ type: 'error', text: 'No weekdays in the selected range.' }); return }
+
+    // Filter out dates already marked as NWD
+    const existingNwdSet = new Set(nwdList.map((d) => d.entry_date))
+    const newDates = allDates.filter((d) => !existingNwdSet.has(d))
+    if (newDates.length === 0) {
+      setMessage({ type: 'error', text: allDates.length === 1 ? 'That date is already a non-working day.' : 'All dates in this range are already non-working days.' })
       return
     }
 
-    // Check for duplicate
-    if (nwdList.some((d) => d.entry_date === nwdDate)) {
-      setMessage({ type: 'error', text: 'That date is already marked as a non-working day.' })
-      return
-    }
-
+    // Check for existing entries on these dates
     setNwdAdding(true)
     setMessage(null)
     try {
-      const { error } = await supabase.from('non_working_days').insert({ user_id: user.id, entry_date: nwdDate, reason })
+      const { data: entries } = await supabase
+        .from('timesheet_entries')
+        .select('entry_date, status')
+        .eq('user_id', user.id)
+        .in('entry_date', newDates)
+
+      const draftDates = [] // draft or returned — can be removed
+      const blockedDates = [] // submitted or signed_off — cannot be overridden
+      const entryDateSet = new Set()
+
+      for (const entry of (entries || [])) {
+        if (entryDateSet.has(entry.entry_date)) continue // already categorised
+        entryDateSet.add(entry.entry_date)
+        if (entry.status === 'submitted' || entry.status === 'signed_off') {
+          blockedDates.push(entry.entry_date)
+        } else {
+          draftDates.push(entry.entry_date)
+        }
+      }
+
+      // Re-check: some dates might have both draft and submitted entries
+      // Fetch full picture per date
+      if (entries && entries.length > 0) {
+        const dateStatuses = {}
+        for (const entry of entries) {
+          if (!dateStatuses[entry.entry_date]) dateStatuses[entry.entry_date] = new Set()
+          dateStatuses[entry.entry_date].add(entry.status)
+        }
+        draftDates.length = 0
+        blockedDates.length = 0
+        for (const [date, statuses] of Object.entries(dateStatuses)) {
+          if (statuses.has('submitted') || statuses.has('signed_off')) {
+            blockedDates.push(date)
+          } else {
+            draftDates.push(date)
+          }
+        }
+      }
+
+      const pendingDates = newDates.filter((d) => !entryDateSet.has(d))
+
+      if (draftDates.length > 0 || blockedDates.length > 0) {
+        // Show conflict dialog
+        setNwdConflict({ draftDates: draftDates.sort(), blockedDates: blockedDates.sort(), pendingDates: pendingDates.sort(), reason })
+        setNwdAdding(false)
+        return
+      }
+
+      // No conflicts — insert all
+      await insertNwdDates(pendingDates, reason)
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message })
+      setNwdAdding(false)
+    }
+  }
+
+  async function insertNwdDates(dates, reason) {
+    if (dates.length === 0) return
+    try {
+      const rows = dates.map((d) => ({ user_id: user.id, entry_date: d, reason }))
+      const { error } = await supabase.from('non_working_days').insert(rows)
       if (error) throw error
-      setNwdDate('')
+      setNwdDateRange({ start: '', end: '' })
       setNwdCustomReason('')
       await loadNonWorkingDays()
-      setMessage({ type: 'success', text: 'Non-working day added.' })
+      const count = dates.length
+      setMessage({ type: 'success', text: count === 1 ? 'Non-working day added.' : `${count} non-working days added.` })
     } catch (err) {
       setMessage({ type: 'error', text: err.message })
     } finally {
       setNwdAdding(false)
+    }
+  }
+
+  async function handleConflictConfirm() {
+    // User confirmed: delete draft entries on draftDates, then insert NWD for draftDates + pendingDates
+    const { draftDates, pendingDates, reason } = nwdConflict
+    setNwdConflict(null)
+    setNwdAdding(true)
+    try {
+      // Delete draft/returned entries on the affected dates
+      if (draftDates.length > 0) {
+        const { error } = await supabase
+          .from('timesheet_entries')
+          .delete()
+          .eq('user_id', user.id)
+          .in('entry_date', draftDates)
+          .in('status', ['draft', 'returned'])
+        if (error) throw error
+      }
+      await insertNwdDates([...draftDates, ...pendingDates], reason)
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message })
+      setNwdAdding(false)
+    }
+  }
+
+  function handleConflictSkipBlocked() {
+    // Insert NWD only for non-blocked dates (pending + draft after removal)
+    const { draftDates, pendingDates, reason } = nwdConflict
+    if (draftDates.length > 0) {
+      // Still need to confirm draft removal
+      handleConflictConfirm()
+    } else {
+      // Only blocked dates — just insert the pending ones
+      setNwdConflict(null)
+      setNwdAdding(true)
+      insertNwdDates(pendingDates, reason)
     }
   }
 
@@ -334,14 +446,15 @@ export default function ProfilePage() {
         </div>
 
         <form onSubmit={handleAddNwd} className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Date</label>
+          <div className="flex-1 min-w-[220px]">
+            <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Date or Range</label>
             <DatePicker
-              value={nwdDate}
-              onChange={setNwdDate}
+              value={nwdDateRange}
+              onChange={setNwdDateRange}
+              userId={user?.id}
               highlightDates={nwdHighlightDates}
               disableWeekends
-              placeholder="Pick a date"
+              placeholder="Pick a date or range"
             />
           </div>
           <div className="flex-1 min-w-[160px]">
@@ -368,7 +481,7 @@ export default function ProfilePage() {
             </div>
           )}
           <button type="submit" disabled={nwdAdding} className="btn-gradient text-sm disabled:opacity-50 whitespace-nowrap">
-            {nwdAdding ? 'Adding...' : 'Add day'}
+            {nwdAdding ? 'Adding...' : 'Add days'}
           </button>
         </form>
 
@@ -405,6 +518,77 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+
+      {/* Conflict dialog */}
+      {nwdConflict && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => { setNwdConflict(null); setNwdAdding(false) }} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="glass-card rounded-2xl w-full max-w-md p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(251,191,36,0.1)' }}>
+                  <span className="material-symbols-outlined text-amber-400" style={{ fontSize: '22px' }}>warning</span>
+                </div>
+                <h3 className="font-headline font-bold text-lg text-on-surface">Entry conflicts found</h3>
+              </div>
+
+              {nwdConflict.blockedDates.length > 0 && (
+                <div className="glass-card-inset rounded-xl px-4 py-3">
+                  <p className="text-sm text-error font-medium mb-2">Cannot add non-working days on these dates:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {nwdConflict.blockedDates.map((d) => (
+                      <span key={d} className="text-xs px-2 py-0.5 rounded-full bg-error/10 text-error border border-error/20">
+                        {new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-xs text-on-surface-variant mt-2">
+                    These dates have submitted or signed-off entries. Ask your Resource Admin to return them first.
+                  </p>
+                </div>
+              )}
+
+              {nwdConflict.draftDates.length > 0 && (
+                <div className="glass-card-inset rounded-xl px-4 py-3">
+                  <p className="text-sm text-amber-400 font-medium mb-2">Draft entries will be removed on these dates:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {nwdConflict.draftDates.map((d) => (
+                      <span key={d} className="text-xs px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20">
+                        {new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {nwdConflict.pendingDates.length > 0 && (
+                <p className="text-sm text-on-surface-variant">
+                  {nwdConflict.pendingDates.length} {nwdConflict.pendingDates.length === 1 ? 'date' : 'dates'} will be added without conflicts.
+                </p>
+              )}
+
+              <div className="flex items-center gap-3 pt-2">
+                {(nwdConflict.draftDates.length > 0 || nwdConflict.pendingDates.length > 0) && (
+                  <button
+                    type="button"
+                    onClick={nwdConflict.draftDates.length > 0 ? handleConflictConfirm : handleConflictSkipBlocked}
+                    className="btn-gradient text-sm"
+                  >
+                    {nwdConflict.draftDates.length > 0 ? 'Remove entries and add NWD' : 'Add remaining days'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setNwdConflict(null); setNwdAdding(false) }}
+                  className="text-sm font-medium text-on-surface-variant hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Avatar upload dialogue */}
       {showAvatarDialog && (

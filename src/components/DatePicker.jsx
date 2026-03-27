@@ -1,23 +1,58 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { supabase } from '../lib/supabase'
 
 const DAY_HEADERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
 /**
- * Single-date calendar picker matching the WeekCalendar visual style.
+ * Calendar picker with optional range selection and entry status indicators.
  *
  * Props:
- *   value          – selected date string (YYYY-MM-DD) or ''
- *   onChange        – called with YYYY-MM-DD when a date is picked
- *   highlightDates – Set of YYYY-MM-DD strings to mark with a dot (e.g. existing NWD)
+ *   value          – { start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' } or { start: '', end: '' }
+ *   onChange        – called with { start, end } when selection changes
+ *   userId          – if provided, fetches entry status data for the visible month
+ *   highlightDates – Set of YYYY-MM-DD strings to mark with a purple dot (e.g. existing NWD)
  *   disableWeekends – if true, Saturday/Sunday are not selectable
  *   placeholder    – text shown when no date selected
  */
-export default function DatePicker({ value, onChange, highlightDates = new Set(), disableWeekends = false, placeholder = 'Select date' }) {
+export default function DatePicker({ value, onChange, userId, highlightDates = new Set(), disableWeekends = false, placeholder = 'Select dates' }) {
   const [open, setOpen] = useState(false)
 
-  const selected = value ? new Date(value + 'T12:00:00') : new Date()
-  const [viewYear, setViewYear] = useState(selected.getFullYear())
-  const [viewMonth, setViewMonth] = useState(selected.getMonth())
+  // Range selection: null = not started, 'start' = picked start waiting for end
+  const [pickingEnd, setPickingEnd] = useState(false)
+  const [hoverDate, setHoverDate] = useState(null)
+
+  const startDate = value?.start || ''
+  const endDate = value?.end || ''
+
+  const initDate = startDate ? new Date(startDate + 'T12:00:00') : new Date()
+  const [viewYear, setViewYear] = useState(initDate.getFullYear())
+  const [viewMonth, setViewMonth] = useState(initDate.getMonth())
+
+  // Entry metadata for the visible month (like WeekCalendar)
+  const [entryDays, setEntryDays] = useState({})
+
+  useEffect(() => {
+    if (!userId || !open) return
+
+    const from = new Date(viewYear, viewMonth - 1, 1).toISOString().slice(0, 10)
+    const to = new Date(viewYear, viewMonth + 2, 0).toISOString().slice(0, 10)
+
+    supabase
+      .from('timesheet_entries')
+      .select('entry_date, time_value, status')
+      .eq('user_id', userId)
+      .gte('entry_date', from)
+      .lte('entry_date', to)
+      .then(({ data }) => {
+        const days = {}
+        for (const e of (data || [])) {
+          if (!days[e.entry_date]) days[e.entry_date] = { total: 0, statuses: new Set() }
+          days[e.entry_date].total += Number(e.time_value || 0)
+          days[e.entry_date].statuses.add(e.status)
+        }
+        setEntryDays(days)
+      })
+  }, [userId, viewYear, viewMonth, open])
 
   const calendarDays = useMemo(() => {
     const firstOfMonth = new Date(viewYear, viewMonth, 1)
@@ -64,37 +99,97 @@ export default function DatePicker({ value, onChange, highlightDates = new Set()
     setViewYear(y)
   }
 
-  function selectDate(dateStr) {
-    onChange(dateStr)
-    setOpen(false)
+  function handleDayClick(dateStr) {
+    if (!pickingEnd) {
+      // First click: set start, clear end, wait for second click
+      onChange({ start: dateStr, end: '' })
+      setPickingEnd(true)
+    } else {
+      // Second click: set end (ensure start <= end)
+      const s = startDate
+      if (dateStr < s) {
+        onChange({ start: dateStr, end: s })
+      } else if (dateStr === s) {
+        // Same date: single-day selection
+        onChange({ start: dateStr, end: dateStr })
+      } else {
+        onChange({ start: s, end: dateStr })
+      }
+      setPickingEnd(false)
+      setOpen(false)
+    }
+  }
+
+  function isInRange(dateStr) {
+    if (!startDate) return false
+    const effectiveEnd = pickingEnd ? (hoverDate || startDate) : endDate
+    if (!effectiveEnd) return dateStr === startDate
+    const lo = startDate < effectiveEnd ? startDate : effectiveEnd
+    const hi = startDate < effectiveEnd ? effectiveEnd : startDate
+    return dateStr >= lo && dateStr <= hi
+  }
+
+  function isRangeStart(dateStr) {
+    if (!startDate) return false
+    const effectiveEnd = pickingEnd ? (hoverDate || startDate) : endDate
+    if (!effectiveEnd) return dateStr === startDate
+    return dateStr === (startDate < effectiveEnd ? startDate : effectiveEnd)
+  }
+
+  function isRangeEnd(dateStr) {
+    if (!startDate) return false
+    const effectiveEnd = pickingEnd ? (hoverDate || startDate) : endDate
+    if (!effectiveEnd) return false
+    return dateStr === (startDate < effectiveEnd ? effectiveEnd : startDate)
   }
 
   const today = new Date().toISOString().slice(0, 10)
   const monthLabel = new Date(viewYear, viewMonth).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 
-  const displayValue = value
-    ? new Date(value + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
-    : placeholder
+  // Format display value
+  const fmt = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+  let displayValue = placeholder
+  if (startDate && endDate && startDate !== endDate) {
+    const fmtShort = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    displayValue = `${fmtShort(startDate)} — ${fmt(endDate)}`
+  } else if (startDate) {
+    displayValue = pickingEnd ? `${fmt(startDate)} — ...` : fmt(startDate)
+  }
+
+  // Entry status dot colour (same logic as WeekCalendar)
+  function getEntryDotColour(dateStr) {
+    const entry = entryDays[dateStr]
+    if (!entry) return null
+    const s = entry.statuses
+    if (s.has('signed_off') || (s.size === 1 && s.has('submitted'))) return '#22c55e'
+    if (s.has('returned')) return '#fbbf24'
+    return '#00C9FF'
+  }
 
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => { setOpen(!open); if (!open) { setPickingEnd(false); setHoverDate(null) } }}
         className="w-full flex items-center justify-between rounded-lg px-4 py-3 text-on-surface text-sm font-medium transition-all focus:ring-2 focus:ring-primary outline-none"
         style={{ background: 'var(--glass-bg)', border: '1px solid var(--color-outline-variant)' }}
       >
-        <span className={value ? '' : 'text-on-surface-variant'}>{displayValue}</span>
+        <span className={startDate ? '' : 'text-on-surface-variant'}>{displayValue}</span>
         <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '18px' }}>calendar_month</span>
       </button>
 
       {open && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setPickingEnd(false) }} />
           <div
-            className="absolute top-full left-0 mt-2 z-50 rounded-xl p-4 w-[320px] shadow-xl"
+            className="absolute top-full left-0 mt-2 z-50 rounded-xl p-4 w-[340px] shadow-xl"
             style={{ background: 'var(--color-surface-container)', border: '1px solid var(--glass-border)' }}
           >
+            {/* Picking hint */}
+            <p className="text-[10px] text-on-surface-variant text-center mb-2 uppercase tracking-wider font-bold">
+              {pickingEnd ? 'Pick end date (or same day for single)' : 'Pick start date'}
+            </p>
+
             {/* Month navigation */}
             <div className="flex items-center justify-between mb-3">
               <button type="button" onClick={() => shiftMonth(-1)} className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all">
@@ -119,31 +214,45 @@ export default function DatePicker({ value, onChange, highlightDates = new Set()
                 <div key={wi} className="grid grid-cols-7 gap-0">
                   {week.map((day) => {
                     const isToday = day.date === today
-                    const isSelected = day.date === value
                     const isHighlighted = highlightDates.has(day.date)
                     const dow = day.d.getDay()
                     const isWeekend = dow === 0 || dow === 6
                     const disabled = disableWeekends && isWeekend
+                    const inRange = isInRange(day.date) && !day.outside
+                    const rangeStart = isRangeStart(day.date) && !day.outside
+                    const rangeEnd = isRangeEnd(day.date) && !day.outside
+                    const entryDot = getEntryDotColour(day.date)
 
                     return (
                       <button
                         key={day.date}
                         type="button"
-                        onClick={() => !disabled && !day.outside && selectDate(day.date)}
+                        onClick={() => !disabled && !day.outside && handleDayClick(day.date)}
+                        onMouseEnter={() => pickingEnd && !day.outside && !disabled && setHoverDate(day.date)}
                         disabled={disabled || day.outside}
-                        className={`relative flex flex-col items-center justify-center py-1.5 rounded-md transition-all text-center
+                        className={`relative flex flex-col items-center justify-center py-1.5 transition-all text-center
                           ${day.outside ? 'opacity-30' : ''}
                           ${disabled && !day.outside ? 'opacity-30 cursor-not-allowed' : ''}
-                          ${isToday ? 'ring-1 ring-primary/50' : ''}
-                          ${isSelected ? 'bg-primary/20 text-primary font-bold' : !disabled && !day.outside ? 'hover:bg-white/5 cursor-pointer' : ''}
+                          ${isToday && !inRange ? 'ring-1 ring-primary/50' : ''}
+                          ${rangeStart ? 'rounded-l-md' : ''}
+                          ${rangeEnd ? 'rounded-r-md' : ''}
+                          ${!rangeStart && !rangeEnd && inRange ? '' : !inRange ? 'rounded-md' : ''}
+                          ${inRange ? 'bg-primary/15' : !disabled && !day.outside ? 'hover:bg-white/5 cursor-pointer' : ''}
+                          ${rangeStart || rangeEnd ? 'bg-primary/25' : ''}
                         `}
                       >
-                        <span className={`text-xs tabular-nums ${day.outside ? 'text-on-surface-variant' : isSelected ? 'text-primary font-bold' : 'text-on-surface'}`}>
+                        <span className={`text-xs tabular-nums ${day.outside ? 'text-on-surface-variant' : (rangeStart || rangeEnd) ? 'text-primary font-bold' : inRange ? 'text-primary' : 'text-on-surface'}`}>
                           {day.day}
                         </span>
-                        {isHighlighted && !day.outside && (
-                          <div className="w-1.5 h-1.5 rounded-full mt-0.5" style={{ background: '#B685FF' }} />
-                        )}
+                        {/* Status dots */}
+                        <div className="flex gap-0.5 mt-0.5 h-1.5">
+                          {entryDot && !day.outside && (
+                            <div className="w-1.5 h-1.5 rounded-full" style={{ background: entryDot }} />
+                          )}
+                          {isHighlighted && !day.outside && (
+                            <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#B685FF' }} />
+                          )}
+                        </div>
                       </button>
                     )
                   })}
@@ -151,11 +260,33 @@ export default function DatePicker({ value, onChange, highlightDates = new Set()
               ))}
             </div>
 
+            {/* Legend */}
+            {userId && (
+              <div className="flex flex-wrap gap-3 mt-3 pt-2" style={{ borderTop: '1px solid var(--glass-border-subtle)' }}>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full" style={{ background: '#00C9FF' }} />
+                  <span className="text-[10px] text-on-surface-variant">Draft</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full" style={{ background: '#22c55e' }} />
+                  <span className="text-[10px] text-on-surface-variant">Submitted</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full" style={{ background: '#fbbf24' }} />
+                  <span className="text-[10px] text-on-surface-variant">Returned</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full" style={{ background: '#B685FF' }} />
+                  <span className="text-[10px] text-on-surface-variant">NWD</span>
+                </div>
+              </div>
+            )}
+
             {/* Quick actions */}
             <div className="flex items-center justify-between mt-3 pt-2" style={{ borderTop: '1px solid var(--glass-border-subtle)' }}>
               <button
                 type="button"
-                onClick={() => { onChange(''); setOpen(false) }}
+                onClick={() => { onChange({ start: '', end: '' }); setPickingEnd(false); setOpen(false) }}
                 className="text-xs font-medium text-on-surface-variant hover:text-primary transition-colors"
               >Clear</button>
               <button
