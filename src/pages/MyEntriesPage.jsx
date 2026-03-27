@@ -5,7 +5,7 @@ import { useEntries } from '../hooks/useEntries'
 import { supabase } from '../lib/supabase'
 import EntryCard from '../components/EntryCard'
 import StatusBadge from '../components/StatusBadge'
-import { CATEGORIES, isValidHourIncrement, roundDays, formatDate } from '../lib/constants'
+import { CATEGORIES, isValidHourIncrement, roundDays, formatDate, localDateStr } from '../lib/constants'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 // Inline edit modal
@@ -118,7 +118,7 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
   const weDate = new Date(weekEnding + 'T12:00:00')
   const weekStart = new Date(weDate)
   weekStart.setDate(weDate.getDate() - 4)
-  const weekStartStr = weekStart.toISOString().slice(0, 10)
+  const weekStartStr = localDateStr(weekStart)
   const nwdInWeek = [...nonWorkingDays.keys()].filter((d) => d >= weekStartStr && d <= weekEnding)
 
   // Merge NWD dates into the day list so they appear in order

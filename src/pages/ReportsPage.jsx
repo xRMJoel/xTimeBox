@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
-import { getCurrentWeekFriday, getWeekDates, CATEGORIES, formatDate, roundDays } from '../lib/constants'
+import { getCurrentWeekFriday, getWeekDates, CATEGORIES, formatDate, roundDays, localDateStr } from '../lib/constants'
 import { exportMonthlyProjectPDF } from '../lib/pdfExport'
 import LoadingSpinner from '../components/LoadingSpinner'
 
@@ -210,9 +210,9 @@ function DateRangeSelector({ range, onChange }) {
 function getDateRange(range) {
   if (range.mode === 'month') {
     const d = new Date(range.monthStart + '-01T12:00:00')
-    const from = d.toISOString().slice(0, 10)
+    const from = localDateStr(d)
     const last = new Date(d.getFullYear(), d.getMonth() + 1, 0)
-    const to = last.toISOString().slice(0, 10)
+    const to = localDateStr(last)
     return { from, to }
   }
   return { from: range.from, to: range.to }
@@ -223,7 +223,7 @@ function defaultRange() {
   const ms = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
   const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  const to = last.toISOString().slice(0, 10)
+  const to = localDateStr(last)
   return { mode: 'month', monthStart: ms, from, to }
 }
 
@@ -445,7 +445,7 @@ function MyTimeSummary({ user }) {
       const day = d.getDay() || 7
       const mon = new Date(d)
       mon.setDate(d.getDate() - day + 1)
-      const key = mon.toISOString().slice(0, 10)
+      const key = localDateStr(mon)
       map[key] = (map[key] || 0) + Number(e.time_value || 0)
     }
     return Object.entries(map)
@@ -568,7 +568,7 @@ function MySubmissionTracker({ user }) {
         const weekDays = getWeekDates(we).filter((d) => !d.isWeekend)
         const datesLogged = new Set(ents.map((e) => e.entry_date))
         // Non-working days don't count as gaps
-        const gaps = weekDays.filter((d) => !datesLogged.has(d.date) && !nwdSet.has(d.date) && d.date <= new Date().toISOString().slice(0, 10))
+        const gaps = weekDays.filter((d) => !datesLogged.has(d.date) && !nwdSet.has(d.date) && d.date <= localDateStr(new Date()))
         const totalDays = ents.reduce((s, e) => s + Number(e.time_value || 0), 0)
         const statuses = new Set(ents.map((e) => e.status))
         const allSubmitted = ents.length > 0 && ents.every((e) => e.status === 'submitted' || e.status === 'signed_off')
@@ -602,7 +602,7 @@ function MySubmissionTracker({ user }) {
       })
   }, [entries])
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateStr(new Date())
 
   return (
     <div className="space-y-6">
@@ -716,7 +716,7 @@ function TeamSubmissionStatus() {
       while (d <= endDate) {
         const day = d.getDay()
         if (day === 5) { // Friday
-          weekEndingsSet.add(d.toISOString().slice(0, 10))
+          weekEndingsSet.add(localDateStr(d))
         }
         d.setDate(d.getDate() + 1)
       }
@@ -1431,9 +1431,9 @@ function MonthlyProjectReport({ user }) {
     setLoading(true)
 
     const d = new Date(monthStart + '-01T12:00:00')
-    const from = d.toISOString().slice(0, 10)
+    const from = localDateStr(d)
     const last = new Date(d.getFullYear(), d.getMonth() + 1, 0)
-    const to = last.toISOString().slice(0, 10)
+    const to = localDateStr(last)
 
     supabase
       .from('timesheet_entries')

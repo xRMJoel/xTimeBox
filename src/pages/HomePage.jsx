@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
-import { getCurrentWeekFriday, getWeekDates, getWorkingDaysInMonth, CATEGORIES, generateReference, formatDate, isValidHourIncrement, hoursToDaysRaw, daysToTimeBlock } from '../lib/constants'
+import { getCurrentWeekFriday, getWeekDates, getWorkingDaysInMonth, CATEGORIES, generateReference, formatDate, isValidHourIncrement, hoursToDaysRaw, daysToTimeBlock, localDateStr } from '../lib/constants'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function HomePage() {
@@ -379,7 +379,7 @@ function WeekAtAGlance({ weekEntries, initialLoad, weekEndingLabel, onOpenDay, n
     byDate[entry.entry_date].push(entry)
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateStr(new Date())
 
   // Overall week status
   const totalLogged = Math.round(weekEntries.reduce((sum, e) => sum + Number(e.time_value || 0), 0) * 100) / 100

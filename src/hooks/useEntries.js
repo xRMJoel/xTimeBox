@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { localDateStr } from '../lib/constants'
 
 // Hook for managing timesheet entries
 export function useEntries() {
@@ -46,7 +47,7 @@ export function useEntries() {
         monthEnd.setMonth(monthEnd.getMonth() + 1)
         query = query
           .gte('entry_date', options.monthStart)
-          .lt('entry_date', monthEnd.toISOString().slice(0, 10))
+          .lt('entry_date', localDateStr(monthEnd))
       }
 
       if (options.limit) {
@@ -90,7 +91,7 @@ export function useEntries() {
           monthEnd.setMonth(monthEnd.getMonth() + 1)
           query = query
             .gte('entry_date', options.monthStart)
-            .lt('entry_date', monthEnd.toISOString().slice(0, 10))
+            .lt('entry_date', localDateStr(monthEnd))
         }
 
         if (options.userId) {

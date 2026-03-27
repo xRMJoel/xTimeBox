@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { localDateStr } from '../lib/constants'
 
 const DAY_HEADERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
@@ -29,8 +30,8 @@ export default function WeekCalendar({ value, onChange, userId }) {
     if (!userId) return
 
     // Fetch a window that covers the full calendar grid (prev month tail + next month head)
-    const from = new Date(viewYear, viewMonth - 1, 1).toISOString().slice(0, 10)
-    const to = new Date(viewYear, viewMonth + 2, 0).toISOString().slice(0, 10)
+    const from = localDateStr(new Date(viewYear, viewMonth - 1, 1))
+    const to = localDateStr(new Date(viewYear, viewMonth + 2, 0))
 
     supabase
       .from('timesheet_entries')
@@ -87,20 +88,20 @@ export default function WeekCalendar({ value, onChange, userId }) {
     const prevMonthDays = new Date(viewYear, viewMonth, 0).getDate()
     for (let i = startDow - 1; i >= 0; i--) {
       const d = new Date(viewYear, viewMonth - 1, prevMonthDays - i)
-      days.push({ date: d.toISOString().slice(0, 10), day: prevMonthDays - i, outside: true, d })
+      days.push({ date: localDateStr(d), day: prevMonthDays - i, outside: true, d })
     }
 
     // Current month days
     for (let i = 1; i <= daysInMonth; i++) {
       const d = new Date(viewYear, viewMonth, i)
-      days.push({ date: d.toISOString().slice(0, 10), day: i, outside: false, d })
+      days.push({ date: localDateStr(d), day: i, outside: false, d })
     }
 
     // Trailing days to fill 6 rows (42 cells)
     const remaining = 42 - days.length
     for (let i = 1; i <= remaining; i++) {
       const d = new Date(viewYear, viewMonth + 1, i)
-      days.push({ date: d.toISOString().slice(0, 10), day: i, outside: true, d })
+      days.push({ date: localDateStr(d), day: i, outside: true, d })
     }
 
     return days
@@ -131,12 +132,12 @@ export default function WeekCalendar({ value, onChange, userId }) {
     const diffToFri = dow <= 5 ? 5 - dow : 5 - dow + 7
     const friday = new Date(d)
     friday.setDate(d.getDate() + diffToFri)
-    const fridayStr = friday.toISOString().slice(0, 10)
+    const fridayStr = localDateStr(friday)
     onChange(fridayStr)
     setOpen(false)
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateStr(new Date())
   const monthLabel = new Date(viewYear, viewMonth).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 
   // Format the selected date for display
@@ -294,7 +295,7 @@ export default function WeekCalendar({ value, onChange, userId }) {
                   const now = new Date()
                   setViewYear(now.getFullYear())
                   setViewMonth(now.getMonth())
-                  selectDate(now.toISOString().slice(0, 10))
+                  selectDate(localDateStr(now))
                 }}
                 className="text-xs font-medium text-primary hover:text-primary-dim transition-colors"
               >Today</button>

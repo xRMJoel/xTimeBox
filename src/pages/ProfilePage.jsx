@@ -1,9 +1,101 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
+import { localDateStr } from '../lib/constants'
 import DatePicker from '../components/DatePicker'
 
 const NWD_REASONS = ['Holiday', 'Training', 'Sick Leave', 'Personal', 'Bank Holiday', 'Other']
+
+// Reason badge colour mapping
+const REASON_COLOURS = {
+  Holiday:      { text: 'text-purple-400', bg: 'bg-purple-400/10', border: 'border-purple-400/20' },
+  Training:     { text: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/20' },
+  'Sick Leave': { text: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/20' },
+  Personal:     { text: 'text-teal-400', bg: 'bg-teal-400/10', border: 'border-teal-400/20' },
+  'Bank Holiday': { text: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/20' },
+}
+const DEFAULT_REASON_COLOUR = { text: 'text-on-surface-variant', bg: 'bg-white/5', border: 'border-white/10' }
+
+function NwdRow({ nwd, onDelete, isPast }) {
+  const d = new Date(nwd.entry_date + 'T12:00:00')
+  const label = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+  const rc = REASON_COLOURS[nwd.reason] || DEFAULT_REASON_COLOUR
+
+  return (
+    <div className={`flex items-center justify-between py-2.5 px-3 rounded-lg ${isPast ? 'opacity-50' : ''}`} style={{ background: 'var(--glass-bg)' }}>
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="material-symbols-outlined text-on-surface-variant flex-shrink-0" style={{ fontSize: '16px' }}>
+          {isPast ? 'event_available' : 'event_upcoming'}
+        </span>
+        <span className="text-sm text-on-surface font-medium">{label}</span>
+        <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${rc.text} ${rc.bg} border ${rc.border}`}>
+          {nwd.reason || 'Non-working day'}
+        </span>
+      </div>
+      {!isPast && (
+        <button
+          type="button"
+          onClick={() => onDelete(nwd.id)}
+          className="text-on-surface-variant hover:text-error transition-colors p-1 flex-shrink-0"
+          title="Remove"
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>close</span>
+        </button>
+      )}
+    </div>
+  )
+}
+
+function NwdListSections({ nwdList, onDelete }) {
+  const [showPast, setShowPast] = useState(false)
+  const todayStr = localDateStr(new Date())
+
+  const upcoming = nwdList.filter((n) => n.entry_date >= todayStr).sort((a, b) => a.entry_date.localeCompare(b.entry_date))
+  const past = nwdList.filter((n) => n.entry_date < todayStr).sort((a, b) => b.entry_date.localeCompare(a.entry_date))
+
+  return (
+    <div className="space-y-4">
+      {/* Upcoming */}
+      {upcoming.length > 0 ? (
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-1">Upcoming</p>
+          {upcoming.map((nwd) => (
+            <NwdRow key={nwd.id} nwd={nwd} onDelete={onDelete} isPast={false} />
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-on-surface-variant">No upcoming non-working days.</p>
+      )}
+
+      {/* Past — collapsed by default */}
+      {past.length > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowPast(!showPast)}
+            className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors w-full"
+          >
+            <span
+              className="material-symbols-outlined transition-transform duration-200"
+              style={{ fontSize: '18px', transform: showPast ? 'rotate(90deg)' : 'rotate(0deg)' }}
+            >
+              chevron_right
+            </span>
+            <span className="font-medium">Past non-working days</span>
+            <span className="text-xs text-outline">({past.length})</span>
+          </button>
+          {showPast && (
+            <div className="space-y-1.5 mt-2 max-h-60 overflow-y-auto pr-1">
+              {past.map((nwd) => (
+                <NwdRow key={nwd.id} nwd={nwd} onDelete={onDelete} isPast={true} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function ProfilePage() {
   const { profile, user, updateProfile } = useAuth()
@@ -57,7 +149,7 @@ export default function ProfilePage() {
     const last = new Date(endStr + 'T12:00:00')
     while (d <= last) {
       const dow = d.getDay()
-      if (dow !== 0 && dow !== 6) dates.push(d.toISOString().slice(0, 10))
+      if (dow !== 0 && dow !== 6) dates.push(localDateStr(d))
       d.setDate(d.getDate() + 1)
     }
     return dates
@@ -485,38 +577,12 @@ export default function ProfilePage() {
           </button>
         </form>
 
-        {/* NWD list */}
+        {/* NWD list — split into upcoming and past */}
         {nwdLoading ? (
           <p className="text-sm text-on-surface-variant">Loading...</p>
         ) : nwdList.length === 0 ? (
           <p className="text-sm text-on-surface-variant">No non-working days recorded.</p>
-        ) : (
-          <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
-            {nwdList.map((nwd) => {
-              const d = new Date(nwd.entry_date + 'T12:00:00')
-              const label = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
-              const isPast = nwd.entry_date < new Date().toISOString().slice(0, 10)
-              return (
-                <div key={nwd.id} className={`flex items-center justify-between py-2 px-3 rounded-lg ${isPast ? 'opacity-50' : ''}`} style={{ background: 'var(--glass-bg)' }}>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-on-surface font-medium">{label}</span>
-                    <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full text-purple-400 bg-purple-400/10 border border-purple-400/20">
-                      {nwd.reason || 'Non-working day'}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteNwd(nwd.id)}
-                    className="text-on-surface-variant hover:text-error transition-colors p-1"
-                    title="Remove"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>close</span>
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        )}
+        ) : <NwdListSections nwdList={nwdList} onDelete={handleDeleteNwd} />}
       </div>
 
       {/* Conflict dialog */}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { localDateStr } from '../lib/constants'
 
 const DAY_HEADERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
@@ -34,8 +35,8 @@ export default function DatePicker({ value, onChange, userId, highlightDates = n
   useEffect(() => {
     if (!userId || !open) return
 
-    const from = new Date(viewYear, viewMonth - 1, 1).toISOString().slice(0, 10)
-    const to = new Date(viewYear, viewMonth + 2, 0).toISOString().slice(0, 10)
+    const from = localDateStr(new Date(viewYear, viewMonth - 1, 1))
+    const to = localDateStr(new Date(viewYear, viewMonth + 2, 0))
 
     supabase
       .from('timesheet_entries')
@@ -65,18 +66,18 @@ export default function DatePicker({ value, onChange, userId, highlightDates = n
     const prevMonthDays = new Date(viewYear, viewMonth, 0).getDate()
     for (let i = startDow - 1; i >= 0; i--) {
       const d = new Date(viewYear, viewMonth - 1, prevMonthDays - i)
-      days.push({ date: d.toISOString().slice(0, 10), day: prevMonthDays - i, outside: true, d })
+      days.push({ date: localDateStr(d), day: prevMonthDays - i, outside: true, d })
     }
 
     for (let i = 1; i <= daysInMonth; i++) {
       const d = new Date(viewYear, viewMonth, i)
-      days.push({ date: d.toISOString().slice(0, 10), day: i, outside: false, d })
+      days.push({ date: localDateStr(d), day: i, outside: false, d })
     }
 
     const remaining = 42 - days.length
     for (let i = 1; i <= remaining; i++) {
       const d = new Date(viewYear, viewMonth + 1, i)
-      days.push({ date: d.toISOString().slice(0, 10), day: i, outside: true, d })
+      days.push({ date: localDateStr(d), day: i, outside: true, d })
     }
 
     return days
@@ -143,7 +144,7 @@ export default function DatePicker({ value, onChange, userId, highlightDates = n
     return dateStr === (startDate < effectiveEnd ? effectiveEnd : startDate)
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateStr(new Date())
   const monthLabel = new Date(viewYear, viewMonth).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 
   // Format display value

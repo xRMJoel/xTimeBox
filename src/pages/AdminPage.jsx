@@ -3,20 +3,20 @@ import { useAuth } from '../hooks/useAuth'
 import { useEntries, useSignoffs } from '../hooks/useEntries'
 import StatusBadge from '../components/StatusBadge'
 import EntryCard from '../components/EntryCard'
-import { formatDate, getMonthLabel, getCurrentWeekFriday, getWorkingDaysInMonth } from '../lib/constants'
+import { formatDate, getMonthLabel, getCurrentWeekFriday, getWorkingDaysInMonth, localDateStr } from '../lib/constants'
 import { supabase } from '../lib/supabase'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 // ── Helpers ──
 function currentMonthStart() {
   const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+  return localDateStr(new Date(now.getFullYear(), now.getMonth(), 1))
 }
 
 function shiftMonth(monthStart, delta) {
   const d = new Date(monthStart + 'T12:00:00')
   d.setMonth(d.getMonth() + delta)
-  return d.toISOString().slice(0, 10)
+  return localDateStr(d)
 }
 
 // ── Collapsible week section for approval detail view with per-week sign-off ──
@@ -29,7 +29,7 @@ function CollapsibleWeekAdmin({ weekEnding, weekEntries, weekTotal, isSignedOff,
   const weekStart = new Date(weDate)
   weekStart.setDate(weDate.getDate() - 4) // Monday
   const nwdInWeek = [...nonWorkingDays.keys()].filter((d) => {
-    return d >= weekStart.toISOString().slice(0, 10) && d <= weekEnding
+    return d >= localDateStr(weekStart) && d <= weekEnding
   })
 
   // Merge NWD dates into the day list so they appear in order
@@ -172,7 +172,7 @@ function ApprovalsTab() {
   const [allProfiles, setAllProfiles] = useState([])
 
   const loadData = useCallback(async () => {
-    const monthEnd = new Date(new Date(monthStart + 'T12:00:00').getFullYear(), new Date(monthStart + 'T12:00:00').getMonth() + 1, 0).toISOString().slice(0, 10)
+    const monthEnd = localDateStr(new Date(new Date(monthStart + 'T12:00:00').getFullYear(), new Date(monthStart + 'T12:00:00').getMonth() + 1, 0))
     const results = await Promise.allSettled([
       fetchAllEntries({ monthStart }),
       supabase.from('projects').select('*').eq('status', 'active').then((r) => r.data || []),
@@ -418,7 +418,7 @@ function ApprovalsTab() {
   // ── Compute per-user metrics ──
   const monthDate = new Date(monthStart + 'T12:00:00')
   const allWorkingDayDates = getWorkingDaysInMonth(monthDate.getFullYear(), monthDate.getMonth())
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateStr(new Date())
   const currentWeekFriday = getCurrentWeekFriday()
 
   // Group non-working days by user

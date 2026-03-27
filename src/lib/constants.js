@@ -57,7 +57,7 @@ export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'
 // Generate a unique reference: XRM-YYYYMMDD-ABC-01
 export function generateReference(date, counter = 1) {
   const d = new Date(date)
-  const dateStr = d.toISOString().slice(0, 10).replace(/-/g, '')
+  const dateStr = localDateStr(d).replace(/-/g, '')
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
   const randomBytes = crypto.getRandomValues(new Uint8Array(3))
   const rand = Array.from(randomBytes, (b) => chars[b % chars.length]).join('')
@@ -72,7 +72,7 @@ export function getCurrentWeekFriday() {
   const diff = 5 - day // 5 = Friday
   const friday = new Date(now)
   friday.setDate(now.getDate() + diff)
-  return friday.toISOString().slice(0, 10)
+  return localDateStr(friday)
 }
 
 // Get all dates for a week given the Friday (week ending)
@@ -86,7 +86,7 @@ export function getWeekDates(weekEndingStr) {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
     dates.push({
-      date: d.toISOString().slice(0, 10),
+      date: localDateStr(d),
       dayName: DAY_NAMES[i],
       isWeekend: i >= 5,
     })
@@ -102,10 +102,18 @@ export function getWorkingDaysInMonth(year, month) {
     const date = new Date(year, month, d)
     const dow = date.getDay()
     if (dow >= 1 && dow <= 5) {
-      days.push(date.toISOString().slice(0, 10))
+      days.push(localDateStr(date))
     }
   }
   return days
+}
+
+// Format a Date object to YYYY-MM-DD using local timezone (avoids UTC shift from toISOString)
+export function localDateStr(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 // Format a date string nicely
@@ -129,5 +137,5 @@ export function getMonthLabel(dateStr) {
 // Get the first day of a month from any date in that month
 export function getMonthStart(dateStr) {
   const d = new Date(dateStr + 'T12:00:00')
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
+  return localDateStr(new Date(d.getFullYear(), d.getMonth(), 1))
 }
