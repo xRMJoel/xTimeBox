@@ -189,6 +189,9 @@ export function useEntries() {
         .select()
 
       if (err) throw err
+      if (!data || data.length === 0) {
+        throw new Error('No entries were updated. They may have already been signed off or modified by another user.')
+      }
       return data
     } catch (e) {
       setError(e.message)

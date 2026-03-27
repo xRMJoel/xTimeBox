@@ -59,7 +59,8 @@ export function generateReference(date, counter = 1) {
   const d = new Date(date)
   const dateStr = d.toISOString().slice(0, 10).replace(/-/g, '')
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-  const rand = Array.from({ length: 3 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  const randomBytes = crypto.getRandomValues(new Uint8Array(3))
+  const rand = Array.from(randomBytes, (b) => chars[b % chars.length]).join('')
   const num = String(counter).padStart(2, '0')
   return `XRM-${dateStr}-${rand}-${num}`
 }

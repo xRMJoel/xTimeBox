@@ -6,7 +6,6 @@ import { supabase } from '../lib/supabase'
 import WeekCalendar from '../components/WeekCalendar'
 import {
   CATEGORIES,
-  TIME_BLOCKS,
   isValidHourIncrement,
   hoursToDaysRaw,
   roundDays,

@@ -154,7 +154,7 @@
 body {
   background-color: var(--color-bg);
   color: var(--color-on-surface);
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: 'Nunito Sans', system-ui, sans-serif;
   transition: background-color 0.3s, color 0.3s;
 }
 
@@ -335,7 +335,7 @@ body::after {
   border: 1px solid var(--input-border);
   border-radius: 10px;
   font-size: 0.875rem;
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Nunito Sans', sans-serif;
   color: var(--color-on-surface);
   background: var(--input-bg);
   transition: border-color 0.2s, box-shadow 0.2s;
