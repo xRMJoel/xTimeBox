@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
+import DatePicker from '../components/DatePicker'
 
 const NWD_REASONS = ['Holiday', 'Training', 'Sick Leave', 'Personal', 'Bank Holiday', 'Other']
 
@@ -81,6 +82,8 @@ export default function ProfilePage() {
       setNwdAdding(false)
     }
   }
+
+  const nwdHighlightDates = useMemo(() => new Set(nwdList.map((d) => d.entry_date)), [nwdList])
 
   async function handleDeleteNwd(id) {
     try {
@@ -331,14 +334,14 @@ export default function ProfilePage() {
         </div>
 
         <form onSubmit={handleAddNwd} className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[160px]">
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-outline mb-2">Date</label>
-            <input
-              type="date"
+            <DatePicker
               value={nwdDate}
-              onChange={(e) => setNwdDate(e.target.value)}
-              required
-              className="input-dark w-full"
+              onChange={setNwdDate}
+              highlightDates={nwdHighlightDates}
+              disableWeekends
+              placeholder="Pick a date"
             />
           </div>
           <div className="flex-1 min-w-[160px]">
