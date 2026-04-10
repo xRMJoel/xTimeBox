@@ -3,6 +3,7 @@
 export const CATEGORIES = [
   { value: 'Onboarding', label: 'Onboarding', showReference: false, referencePlaceholder: '', requiresNotes: true },
   { value: 'Support Ticket Investigation', label: 'Support Ticket Investigation', showReference: true, referencePlaceholder: 'Support Ticket ID', requiresNotes: true },
+  { value: 'Solution Design', label: 'Solution Design', showReference: true, referencePlaceholder: 'Design Reference', requiresNotes: true },
   { value: 'Development', label: 'Development', showReference: true, referencePlaceholder: 'Feature/Requirement ID', requiresNotes: true },
   { value: 'Testing', label: 'Testing', showReference: true, referencePlaceholder: 'Feature/Requirement ID', requiresNotes: true },
   { value: 'UAT Support', label: 'UAT Support', showReference: true, referencePlaceholder: 'Feature/Requirement ID', requiresNotes: true },

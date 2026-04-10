@@ -2,7 +2,7 @@
 
 > **Purpose:** This file provides full project context for AI tools working on xTimeBox. Load this at the start of every session involving this codebase.
 >
-> **Last updated:** 2026-03-27
+> **Last updated:** 2026-04-10
 >
 > **Owner:** Joel Abbott (Joel.Abbott@xrm365.co.uk)
 
@@ -228,7 +228,7 @@ Time is logged in **hours**. The system converts hours to days using `hours_per_
 
 Defined in `constants.js`. Each category specifies whether it shows a reference field and what the placeholder text should be:
 
-Onboarding, Support Ticket Investigation, Development, Testing, UAT Support, Release, Other
+Onboarding, Support Ticket Investigation, Solution Design, Development, Testing, UAT Support, Release, Other
 
 ---
 
