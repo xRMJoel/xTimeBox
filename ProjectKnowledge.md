@@ -2,7 +2,7 @@
 
 > **Purpose:** This file provides full project context for AI tools working on xTimeBox. Load this at the start of every session involving this codebase.
 >
-> **Last updated:** 2026-04-10
+> **Last updated:** 2026-04-10 (days are now trigger-derived server-side)
 >
 > **Owner:** Joel Abbott (Joel.Abbott@xrm365.co.uk)
 
@@ -144,8 +144,10 @@ Migrations are numbered sequentially. The base schema is in `migration.sql`. All
 | 012 | Fixed get_admin_summary to include returned_count |
 | 013 | Server-side trigger to sync auth.users.email to profiles.email on email change confirmation |
 | 014 | Add `reason` column to `non_working_days` table |
+| 015 | Enforce `user_projects.hours_per_day` NOT NULL + CHECK > 0 |
+| 016 | Authoritative BEFORE INSERT/UPDATE trigger on `timesheet_entries` deriving `time_value` and `time_block` from `time_hours` and `user_projects.hours_per_day`, plus one-off self-heal pass |
 
-**Next migration number:** 015
+**Next migration number:** 017
 
 ---
 
@@ -212,9 +214,10 @@ Time is logged in **hours**. The system converts hours to days using `hours_per_
 
 1. User enters hours (in 0.25-hour increments, validated by `isValidHourIncrement()`)
 2. Hours are stored in `time_hours` on the entry
-3. Days are calculated: `time_value = time_hours / hours_per_day`
-4. Weekly day totals are rounded UP to nearest 0.25 days (via `roundDays()`)
-5. `hours_per_day` is set per user-project assignment (e.g. 7.5 for a standard day)
+3. Days (`time_value`) and the `time_block` label are derived server-side by the `timesheet_entries_derive_days` trigger (migration 016). The frontend still calculates them for optimistic display, but the DB trigger is authoritative and overwrites whatever the caller supplies.
+4. `user_projects.hours_per_day` is NOT NULL with `CHECK > 0` (migration 015). The trigger raises if a rate can't be resolved on insert, or on an update that changes `time_hours`, `project_id`, or `user_id`. Status-only updates on orphaned historic entries are left alone.
+5. Weekly day totals are rounded UP to nearest 0.25 days (via `roundDays()`)
+6. `hours_per_day` is set per user-project assignment (e.g. 7.5 for a standard day)
 
 ### Key Functions (in constants.js)
 
@@ -332,6 +335,8 @@ These were identified in the code review and have been fixed. Listed here so AI 
 | submitWeek no-op (silently affected zero rows) | Now checks affected row count and throws | Commit fac0a32 |
 | No error handling on admin loadData | Uses Promise.allSettled with error reporting | Commit 6608c1a |
 | generateReference used Math.random | Already uses crypto.getRandomValues (review was incorrect) | N/A |
+| `MyEntriesPage` edit flow left stale `time_value` after an hours change (e.g. 1hr showing as 1.07d) | Edit handler now recalculates `time_value`/`time_block` from `hours_per_day` before save, and a DB trigger recomputes authoritatively on every write | Migration 016 + MyEntriesPage change |
+| `user_projects.hours_per_day` was nullable | Enforced NOT NULL + CHECK > 0 so a user can't be assigned to a project without a valid rate | Migration 015 |
 
 ---
 

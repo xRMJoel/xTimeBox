@@ -5,7 +5,15 @@ import { useEntries } from '../hooks/useEntries'
 import { supabase } from '../lib/supabase'
 import EntryCard from '../components/EntryCard'
 import StatusBadge from '../components/StatusBadge'
-import { CATEGORIES, isValidHourIncrement, roundDays, formatDate, localDateStr } from '../lib/constants'
+import {
+  CATEGORIES,
+  isValidHourIncrement,
+  hoursToDaysRaw,
+  daysToTimeBlock,
+  roundDays,
+  formatDate,
+  localDateStr,
+} from '../lib/constants'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 // Inline edit modal
@@ -325,7 +333,34 @@ export default function MyEntriesPage() {
   async function handleEdit(updates) {
     setSaving(true)
     try {
-      await updateEntry(editingEntry.id, updates)
+      // Derive days from the new hours and the project's rate, so the
+      // frontend's cached copy matches what the DB trigger will persist.
+      // The server-side trigger is authoritative, but recomputing here
+      // avoids a brief stale display between save and refetch.
+      const nextHours = Number(updates.time_hours) || 0
+      const projectId = editingEntry.project_id
+      let nextTimeValue = editingEntry.time_value
+      let nextTimeBlock = editingEntry.time_block
+
+      if (nextHours > 0 && projectId && user?.id) {
+        const { data: up } = await supabase
+          .from('user_projects')
+          .select('hours_per_day')
+          .eq('user_id', user.id)
+          .eq('project_id', projectId)
+          .maybeSingle()
+        const hpd = up?.hours_per_day ? Number(up.hours_per_day) : null
+        if (hpd && hpd > 0) {
+          nextTimeValue = hoursToDaysRaw(nextHours, hpd)
+          nextTimeBlock = daysToTimeBlock(nextTimeValue)
+        }
+      }
+
+      await updateEntry(editingEntry.id, {
+        ...updates,
+        time_value: nextTimeValue,
+        time_block: nextTimeBlock,
+      })
       setEditingEntry(null)
       setMessage({ type: 'success', text: 'Entry updated.' })
       await loadEntries()
