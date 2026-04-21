@@ -2,7 +2,7 @@
 
 > **Purpose:** This file provides full project context for AI tools working on xTimeBox. Load this at the start of every session involving this codebase.
 >
-> **Last updated:** 2026-04-10 (days are now trigger-derived server-side)
+> **Last updated:** 2026-04-21 (UI now handles cross-month weeks where part of the week is signed off)
 >
 > **Owner:** Joel Abbott (Joel.Abbott@xrm365.co.uk)
 
@@ -337,6 +337,7 @@ These were identified in the code review and have been fixed. Listed here so AI 
 | generateReference used Math.random | Already uses crypto.getRandomValues (review was incorrect) | N/A |
 | `MyEntriesPage` edit flow left stale `time_value` after an hours change (e.g. 1hr showing as 1.07d) | Edit handler now recalculates `time_value`/`time_block` from `hours_per_day` before save, and a DB trigger recomputes authoritatively on every write | Migration 016 + MyEntriesPage change |
 | `user_projects.hours_per_day` was nullable | Enforced NOT NULL + CHECK > 0 so a user can't be assigned to a project without a valid rate | Migration 015 |
+| Cross-month weeks: when a week's early days were signed off with the prior month, the remaining days of the same week were unreachable from the UI (no "Edit week" link, week badge read as fully signed off) | `getWeekStatus` now returns `'mixed'` for partially signed-off weeks; `MyEntriesPage` `WeekCard` always shows "Edit week" on cross-month weeks; `TimesheetPage` shows a lock banner and relabels submit button to "Submit drafts" when any entry in the loaded week is signed off. DB layer was already correct (`sign_off_month` filters by `entry_date`). | MyEntriesPage + TimesheetPage + StatusBadge UI change (2026-04-21) |
 
 ---
 

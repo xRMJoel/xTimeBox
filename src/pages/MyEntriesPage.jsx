@@ -99,10 +99,22 @@ function EditModal({ entry, onSave, onCancel, saving }) {
 // Determine the overall status of a week based on its entries
 function getWeekStatus(entries) {
   if (entries.some((e) => e.status === 'returned')) return 'returned'
-  if (entries.every((e) => e.status === 'signed_off')) return 'signed_off'
+  const signedOff = entries.filter((e) => e.status === 'signed_off').length
+  if (signedOff > 0 && signedOff < entries.length) return 'mixed'
+  if (signedOff === entries.length && entries.length > 0) return 'signed_off'
   if (entries.every((e) => e.status === 'submitted')) return 'submitted'
   if (entries.some((e) => e.status === 'submitted')) return 'submitted'
   return 'draft'
+}
+
+// A week is cross-month when its Monday and Friday fall in different months/years.
+// On these weeks we always show "Edit week" so users can add time to the side
+// that isn't signed off yet.
+function isCrossMonth(weekEnding) {
+  const we = new Date(weekEnding + 'T12:00:00')
+  const ws = new Date(we)
+  ws.setDate(we.getDate() - 4)
+  return we.getMonth() !== ws.getMonth() || we.getFullYear() !== ws.getFullYear()
 }
 
 // Collapsible week card
@@ -113,6 +125,11 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
   const weekStatus = getWeekStatus(entries)
   const hasDrafts = entries.some((e) => e.status === 'draft' || e.status === 'returned')
   const hasReturned = entries.some((e) => e.status === 'returned')
+  const hasSignedOff = entries.some((e) => e.status === 'signed_off')
+  const crossMonth = isCrossMonth(weekEnding)
+  // Always allow opening a cross-month week so April days can be added
+  // even when every existing entry for the week is signed off.
+  const showEditLink = hasDrafts || crossMonth
   const projectNames = [...new Set(entries.map((e) => e.projects?.name || e.client).filter(Boolean))].join(', ')
 
   // Group entries by day, then by project within each day
@@ -161,19 +178,19 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
           </div>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          {showEditLink && (
+            <Link
+              to={`/timesheet?week=${weekEnding}`}
+              className="text-sm font-medium text-primary hover:text-primary-dim transition-colors flex items-center gap-1.5"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>edit</span>
+              Edit week
+            </Link>
+          )}
           {hasDrafts && (
-            <>
-              <Link
-                to={`/timesheet?week=${weekEnding}`}
-                className="text-sm font-medium text-primary hover:text-primary-dim transition-colors flex items-center gap-1.5"
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>edit</span>
-                Edit week
-              </Link>
-              <button onClick={() => onSubmit(weekEnding)} className="btn-gradient text-sm">
-                {hasReturned ? 'Resubmit week' : 'Submit week'}
-              </button>
-            </>
+            <button onClick={() => onSubmit(weekEnding)} className="btn-gradient text-sm">
+              {hasReturned ? 'Resubmit week' : (hasSignedOff ? 'Submit drafts' : 'Submit week')}
+            </button>
           )}
         </div>
       </button>
@@ -190,7 +207,25 @@ function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, o
             </div>
           )}
 
-          {hasDrafts && !hasReturned && (
+          {hasSignedOff && hasDrafts && !hasReturned && (
+            <div className="px-6 py-3 flex items-center gap-2" style={{ background: 'rgba(74,222,128,0.05)', borderBottom: '1px solid rgba(74,222,128,0.15)' }}>
+              <span className="material-symbols-outlined text-green-400" style={{ fontSize: '18px' }}>lock</span>
+              <p className="text-sm text-on-surface-variant">
+                Some entries are signed off. The remaining days are drafts, submit when ready.
+              </p>
+            </div>
+          )}
+
+          {hasSignedOff && !hasDrafts && crossMonth && (
+            <div className="px-6 py-3 flex items-center gap-2" style={{ background: 'rgba(74,222,128,0.05)', borderBottom: '1px solid rgba(74,222,128,0.15)' }}>
+              <span className="material-symbols-outlined text-green-400" style={{ fontSize: '18px' }}>lock</span>
+              <p className="text-sm text-on-surface-variant">
+                This week crosses a month boundary. Some days are signed off. Open the week to add time to the days that aren't locked.
+              </p>
+            </div>
+          )}
+
+          {hasDrafts && !hasReturned && !hasSignedOff && (
             <div className="px-6 py-3 flex items-center gap-2" style={{ background: 'var(--white-alpha-2)', borderBottom: '1px solid var(--glass-border-subtle)' }}>
               <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: '18px' }}>edit_note</span>
               <p className="text-sm text-on-surface-variant">

@@ -670,6 +670,7 @@ export default function TimesheetPage() {
   const hasChanges = newEntryCount > 0 || dirtyCount > 0 || deletedCount > 0 || nwdChanged
   const submittableCount = allVisible.filter((e) => e._id && (e.status === 'draft' || e.status === 'returned')).length
   const hasSubmittable = submittableCount > 0 || newEntryCount > 0
+  const hasSignedOff = allVisible.some((e) => e.status === 'signed_off')
 
   // Filter out deleted entries for display
   const visibleEntries = (date) => (entriesByDate[date] || []).filter((e) => !e._deleted)
@@ -694,6 +695,16 @@ export default function TimesheetPage() {
             </span>
             <p className={`text-sm font-medium ${submitStatus.type === 'success' ? 'text-green-400' : 'text-error'}`}>
               {submitStatus.message}
+            </p>
+          </div>
+        )}
+
+        {/* Partial sign-off notice — appears when this week contains any signed-off entries */}
+        {hasSignedOff && (
+          <div className="glass-card rounded-xl p-4 flex items-center gap-3 border-green-400/20" style={{ background: 'rgba(74,222,128,0.05)' }}>
+            <span className="material-symbols-outlined text-green-400">lock</span>
+            <p className="text-sm font-medium text-on-surface">
+              Some entries in this week are signed off and cannot be edited. You can still add time or edit entries on the other days.
             </p>
           </div>
         )}
@@ -791,7 +802,7 @@ export default function TimesheetPage() {
                 disabled={loading || (!hasSubmittable && !hasChanges)}
                 className="signature-gradient-bg px-6 py-3 rounded-xl font-bold text-white shadow-glow hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-40 disabled:transform-none disabled:shadow-none disabled:cursor-not-allowed"
               >
-                {loading ? 'Submitting...' : 'Submit week'}
+                {loading ? 'Submitting...' : (hasSignedOff ? 'Submit drafts' : 'Submit week')}
               </button>
             </div>
           </div>
