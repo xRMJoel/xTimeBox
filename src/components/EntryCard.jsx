@@ -10,6 +10,11 @@ export default function EntryCard({ entry, onEdit, onDelete, readonly = false })
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <span className="font-semibold text-on-surface">{entry.category}</span>
           <StatusBadge status={entry.status} />
+          {entry.client && (
+            <span className="text-xs px-2 py-0.5 rounded border border-secondary/20 text-secondary bg-secondary/5 font-medium">
+              {entry.client}
+            </span>
+          )}
           {entry.feature_tag && (
             <span className="text-xs px-2 py-0.5 rounded border border-primary/20 text-primary bg-primary/5 font-medium">
               {entry.feature_tag}

@@ -157,17 +157,23 @@ export function useEntries() {
     }
   }, [])
 
-  // Delete an entry (only drafts)
+  // Delete an entry. RLS gates which entries the caller can remove.
+  // We request the deleted row back so an RLS block surfaces as an
+  // error instead of a silent no-op.
   const deleteEntry = useCallback(async (entryId) => {
     setLoading(true)
     setError(null)
     try {
-      const { error: err } = await supabase
+      const { data, error: err } = await supabase
         .from('timesheet_entries')
         .delete()
         .eq('id', entryId)
+        .select('id')
 
       if (err) throw err
+      if (!data || data.length === 0) {
+        throw new Error('Entry could not be deleted. You may not have permission, or it has already been removed.')
+      }
     } catch (e) {
       setError(e.message)
       throw e
