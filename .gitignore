@@ -21,3 +21,9 @@ CREDENTIALS.md
 # OS
 .DS_Store
 Thumbs.db
+
+# Plugin packaging artifacts
+*.plugin
+
+# Local-only assets (logos, working images, etc.)
+Resources/
