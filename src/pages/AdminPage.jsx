@@ -805,6 +805,13 @@ function UsersTab() {
   const [deleteUserEntries, setDeleteUserEntries] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  // Hours-per-day edit flow. Local draft for each user-project input + a confirm
+  // modal that surfaces before the rate is committed, since a rate change only
+  // applies to entries created from that point onwards.
+  const [hoursDraft, setHoursDraft] = useState({}) // { 'userId-projectId': '7.5' }
+  const [pendingHoursChange, setPendingHoursChange] = useState(null) // { userId, projectId, userName, projectName, oldValue, newValue }
+  const [savingHours, setSavingHours] = useState(false)
+
   async function loadData() {
     setLoading(true)
     const [usersRes, projectsRes, upRes] = await Promise.all([
@@ -849,19 +856,68 @@ function UsersTab() {
     }
   }
 
-  async function updateHoursPerDay(userId, projectId, hoursPerDay) {
+  // Stage a draft value as the admin types. Nothing is saved yet.
+  function stageHoursDraft(userId, projectId, raw) {
+    const key = `${userId}-${projectId}`
+    setHoursDraft((prev) => ({ ...prev, [key]: raw }))
+  }
+
+  // Commit blur/Enter: validate, and if the draft differs from the saved value,
+  // surface the confirm modal. If unchanged or invalid, just clear the draft.
+  function commitHoursDraft(userId, projectId) {
+    const key = `${userId}-${projectId}`
+    const raw = hoursDraft[key]
+    if (raw === undefined) return
+    const assignment = userProjects.find((up) => up.user_id === userId && up.project_id === projectId)
+    const oldValue = assignment ? Number(assignment.hours_per_day) : null
+    const newValue = parseFloat(raw)
+    if (isNaN(newValue) || newValue <= 0) {
+      // Invalid input: drop the draft so the input snaps back to the saved value.
+      setHoursDraft((prev) => { const { [key]: _, ...rest } = prev; return rest })
+      return
+    }
+    if (oldValue !== null && Math.abs(newValue - oldValue) < 1e-9) {
+      // No change: clear the draft.
+      setHoursDraft((prev) => { const { [key]: _, ...rest } = prev; return rest })
+      return
+    }
+    const userRow = users.find((u) => u.id === userId)
+    const projectRow = projects.find((p) => p.id === projectId)
+    setPendingHoursChange({
+      userId, projectId,
+      userName: userRow?.full_name || userRow?.email || 'this user',
+      projectName: projectRow?.name || 'this project',
+      oldValue, newValue,
+    })
+  }
+
+  function cancelPendingHoursChange() {
+    if (!pendingHoursChange) return
+    const key = `${pendingHoursChange.userId}-${pendingHoursChange.projectId}`
+    setHoursDraft((prev) => { const { [key]: _, ...rest } = prev; return rest })
+    setPendingHoursChange(null)
+  }
+
+  async function confirmPendingHoursChange() {
+    if (!pendingHoursChange) return
+    setSavingHours(true)
     try {
-      const value = parseFloat(hoursPerDay)
-      if (isNaN(value) || value <= 0) return
+      const { userId, projectId, newValue } = pendingHoursChange
       const { error } = await supabase
         .from('user_projects')
-        .update({ hours_per_day: value })
+        .update({ hours_per_day: newValue })
         .eq('user_id', userId)
         .eq('project_id', projectId)
       if (error) throw error
+      const key = `${userId}-${projectId}`
+      setHoursDraft((prev) => { const { [key]: _, ...rest } = prev; return rest })
+      setPendingHoursChange(null)
       await loadData()
+      setMessage({ type: 'success', text: 'Rate updated. Existing entries keep their original rate.' })
     } catch (err) {
       setMessage({ type: 'error', text: err.message })
+    } finally {
+      setSavingHours(false)
     }
   }
 
@@ -1075,25 +1131,37 @@ function UsersTab() {
                         {isAssigned ? 'check_circle' : 'radio_button_unchecked'}
                       </span>
                     </button>
-                    {isAssigned && (
-                      <div className="px-4 pb-3 flex items-center gap-2">
-                        <label className="text-[9px] font-bold uppercase tracking-widest text-outline whitespace-nowrap">Hrs/day</label>
-                        <input
-                          type="number"
-                          step="0.5"
-                          min="0.5"
-                          max="24"
-                          value={assignment.hours_per_day || ''}
-                          onChange={(e) => updateHoursPerDay(assigningUser.id, project.id, e.target.value)}
-                          placeholder="e.g. 7.5"
-                          className="w-24 bg-surface-container-highest/50 rounded-lg px-2 py-1.5 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
-                          style={{ background: 'var(--color-surface-variant)', border: !assignment.hours_per_day ? '1.5px solid rgba(255,113,108,0.5)' : '1px solid var(--glass-border)' }}
-                        />
-                        {!assignment.hours_per_day && (
-                          <span className="text-[10px] text-amber-400 font-medium">Required</span>
-                        )}
-                      </div>
-                    )}
+                    {isAssigned && (() => {
+                      const draftKey = `${assigningUser.id}-${project.id}`
+                      const draftValue = hoursDraft[draftKey]
+                      const inputValue = draftValue !== undefined ? draftValue : (assignment.hours_per_day || '')
+                      return (
+                        <div className="px-4 pb-3 flex items-center gap-2">
+                          <label className="text-[9px] font-bold uppercase tracking-widest text-outline whitespace-nowrap">Hrs/day</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0.5"
+                            max="24"
+                            value={inputValue}
+                            onChange={(e) => stageHoursDraft(assigningUser.id, project.id, e.target.value)}
+                            onBlur={() => commitHoursDraft(assigningUser.id, project.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') { e.preventDefault(); commitHoursDraft(assigningUser.id, project.id) }
+                              if (e.key === 'Escape') {
+                                setHoursDraft((prev) => { const { [draftKey]: _, ...rest } = prev; return rest })
+                              }
+                            }}
+                            placeholder="e.g. 7.5"
+                            className="w-24 bg-surface-container-highest/50 rounded-lg px-2 py-1.5 text-sm text-on-surface focus:ring-1 focus:ring-primary outline-none"
+                            style={{ background: 'var(--color-surface-variant)', border: !assignment.hours_per_day ? '1.5px solid rgba(255,113,108,0.5)' : '1px solid var(--glass-border)' }}
+                          />
+                          {!assignment.hours_per_day && (
+                            <span className="text-[10px] text-amber-400 font-medium">Required</span>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 )
               })}
@@ -1111,6 +1179,36 @@ function UsersTab() {
           onClose={() => setShowInvite(false)}
           onInvited={(result) => { setShowInvite(false); setInviteResult(result); loadData() }}
         />
+      )}
+
+      {/* Hours-per-day rate change confirmation */}
+      {pendingHoursChange && (
+        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4" style={{ background: 'var(--modal-overlay)' }}>
+          <div className="glass-card rounded-2xl w-full max-w-md p-6 space-y-4" style={{ background: 'var(--color-surface-container)' }}>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(0,201,255,0.1)', border: '1px solid rgba(0,201,255,0.2)' }}>
+                <span className="material-symbols-outlined text-primary" style={{ fontSize: '18px' }}>schedule</span>
+              </div>
+              <h3 className="font-headline font-bold text-xl text-on-surface">Update hours per day</h3>
+            </div>
+            <p className="text-sm text-on-surface-variant">
+              Change the rate for <strong className="text-on-surface">{pendingHoursChange.userName}</strong> on <strong className="text-on-surface">{pendingHoursChange.projectName}</strong> from <strong className="text-on-surface">{pendingHoursChange.oldValue ?? '–'}</strong> to <strong className="text-on-surface">{pendingHoursChange.newValue}</strong> hours per day?
+            </p>
+            <div className="rounded-xl p-3 flex items-start gap-2.5" style={{ background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.15)' }}>
+              <span className="material-symbols-outlined text-amber-400 flex-shrink-0" style={{ fontSize: '18px' }}>info</span>
+              <p className="text-xs text-amber-400/90">
+                This only applies to entries created from this point forward. Existing entries keep the rate they were saved against. To change days for an existing entry, delete and re-create it.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-4 pt-2">
+              <button onClick={cancelPendingHoursChange} disabled={savingHours} className="text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-50">Cancel</button>
+              <button onClick={confirmPendingHoursChange} disabled={savingHours}
+                className="btn-gradient text-sm disabled:opacity-50">
+                {savingHours ? 'Saving...' : 'Update rate'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Deactivate user confirmation modal */}

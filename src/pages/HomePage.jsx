@@ -121,7 +121,7 @@ export default function HomePage() {
     const weekEnding = getCurrentWeekFriday()
     const { data } = await supabase
       .from('timesheet_entries')
-      .select('id, entry_date, day_name, time_value, time_hours, status, category, time_block, project_id, feature_tag, notes, projects(name)')
+      .select('id, entry_date, day_name, time_value, time_hours, hours_per_day_snapshot, status, category, time_block, project_id, feature_tag, notes, projects(name)')
       .eq('user_id', user.id)
       .eq('week_ending', weekEnding)
       .order('entry_date', { ascending: true })
@@ -542,6 +542,11 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
 
   // Track which entry is being edited (null = adding new)
   const [editingId, setEditingId] = useState(null)
+  // Snapshot of the rate the entry was created at, plus its original project,
+  // so we can mirror the DB trigger's logic when computing optimistic days
+  // on edit (see migration 018).
+  const [editingSnapshot, setEditingSnapshot] = useState(null)
+  const [editingOriginalProjectId, setEditingOriginalProjectId] = useState(null)
 
   // Form state — used for both new entries and editing existing ones
   const emptyForm = { project_id: '', category: '', time_hours: '', feature_tag: '', notes: '' }
@@ -575,6 +580,8 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
 
   function startEdit(entry) {
     setEditingId(entry.id)
+    setEditingSnapshot(entry.hours_per_day_snapshot ?? null)
+    setEditingOriginalProjectId(entry.project_id || null)
     setForm({
       project_id: entry.project_id || '',
       category: entry.category || '',
@@ -588,6 +595,8 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
 
   function cancelEdit() {
     setEditingId(null)
+    setEditingSnapshot(null)
+    setEditingOriginalProjectId(null)
     const defaultProject = userProjects.length === 1 ? userProjects[0].id : ''
     setForm({ ...emptyForm, project_id: defaultProject })
     setError(null)
@@ -613,7 +622,14 @@ function QuickEntryModal({ day, weekEnding, existingEntries, user, onClose, onSa
 
   const category = CATEGORIES.find((c) => c.value === form.category)
   const entryProject = userProjects.find((p) => p.id === form.project_id)
-  const hoursPerDay = entryProject?.hours_per_day
+  // Mirror the DB trigger (migration 018):
+  //   Editing an existing entry, project unchanged → use locked snapshot.
+  //   Editing an existing entry, project changed   → use new project's live rate.
+  //   New entry                                    → use live rate.
+  const projectChangedOnEdit = !!editingId && form.project_id !== editingOriginalProjectId
+  const hoursPerDay = (editingId && !projectChangedOnEdit && editingSnapshot)
+    ? Number(editingSnapshot)
+    : entryProject?.hours_per_day
   const hrs = Number(form.time_hours) || 0
   const canSave = form.project_id && form.category && form.time_hours && isValidHourIncrement(hrs)
 

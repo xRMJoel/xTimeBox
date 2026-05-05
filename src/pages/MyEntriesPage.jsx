@@ -117,6 +117,36 @@ function isCrossMonth(weekEnding) {
   return we.getMonth() !== ws.getMonth() || we.getFullYear() !== ws.getFullYear()
 }
 
+// Month key derived from the week-ending Friday (YYYY-MM).
+// Cross-month weeks are allocated to the month they end in.
+function monthKey(weekEnding) {
+  return weekEnding.slice(0, 7)
+}
+
+function formatMonthLabel(key) {
+  const [y, m] = key.split('-')
+  const d = new Date(Number(y), Number(m) - 1, 1)
+  return d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+}
+
+// Divider shown above the first week of each month in the list.
+function MonthHeader({ monthLabel, weekCount, totalHours, totalDays }) {
+  const hoursLabel = totalHours > 0
+    ? `${totalHours}hrs (${totalDays.toFixed(2)}d)`
+    : `${totalDays}d`
+  return (
+    <div className="flex items-center gap-4 px-1 pt-2">
+      <h3 className="font-headline font-bold text-xs text-outline uppercase tracking-[0.2em] whitespace-nowrap">
+        {monthLabel}
+      </h3>
+      <div className="h-px flex-1" style={{ background: 'var(--glass-border-subtle)' }} />
+      <span className="text-xs text-on-surface-variant font-medium whitespace-nowrap">
+        {hoursLabel} · {weekCount} {weekCount === 1 ? 'week' : 'weeks'}
+      </span>
+    </div>
+  )
+}
+
 // Collapsible week card
 function WeekCard({ weekEnding, entries, expanded, onToggle, onEdit, onDelete, onSubmit, nonWorkingDays = new Map() }) {
   const totalDaysRaw = entries.reduce((sum, e) => sum + Number(e.time_value), 0)
@@ -353,6 +383,19 @@ export default function MyEntriesPage() {
   const returnedWeeks = sortedWeeks.filter((w) => weekGroups[w].some((e) => e.status === 'returned'))
   const otherWeeks = sortedWeeks.filter((w) => !weekGroups[w].some((e) => e.status === 'returned'))
 
+  // Pre-compute totals per month (derived from the week-ending Friday) so the
+  // month divider can show an at-a-glance summary without re-scanning entries
+  // during render.
+  const monthTotals = otherWeeks.reduce((acc, weekEnding) => {
+    const key = monthKey(weekEnding)
+    if (!acc[key]) acc[key] = { weekCount: 0, hoursRaw: 0, daysRaw: 0 }
+    const weekEntries = weekGroups[weekEnding]
+    acc[key].weekCount += 1
+    acc[key].hoursRaw += weekEntries.reduce((sum, e) => sum + Number(e.time_hours || 0), 0)
+    acc[key].daysRaw += weekEntries.reduce((sum, e) => sum + Number(e.time_value), 0)
+    return acc
+  }, {})
+
   function toggleWeek(weekEnding) {
     setExpandedWeeks((prev) => {
       const next = new Set(prev)
@@ -368,23 +411,29 @@ export default function MyEntriesPage() {
   async function handleEdit(updates) {
     setSaving(true)
     try {
-      // Derive days from the new hours and the project's rate, so the
-      // frontend's cached copy matches what the DB trigger will persist.
-      // The server-side trigger is authoritative, but recomputing here
-      // avoids a brief stale display between save and refetch.
+      // Derive days from the new hours and the entry's locked rate snapshot
+      // (migration 018), so the frontend cached copy matches what the DB
+      // trigger will persist. The trigger is authoritative; this avoids a
+      // brief stale display between save and refetch. The edit modal does
+      // not allow changing project_id, so the snapshot is always the right
+      // rate. Fall back to the live user_projects rate for any historic row
+      // that was not backfilled with a snapshot.
       const nextHours = Number(updates.time_hours) || 0
       const projectId = editingEntry.project_id
       let nextTimeValue = editingEntry.time_value
       let nextTimeBlock = editingEntry.time_block
 
       if (nextHours > 0 && projectId && user?.id) {
-        const { data: up } = await supabase
-          .from('user_projects')
-          .select('hours_per_day')
-          .eq('user_id', user.id)
-          .eq('project_id', projectId)
-          .maybeSingle()
-        const hpd = up?.hours_per_day ? Number(up.hours_per_day) : null
+        let hpd = editingEntry.hours_per_day_snapshot ? Number(editingEntry.hours_per_day_snapshot) : null
+        if (!hpd || hpd <= 0) {
+          const { data: up } = await supabase
+            .from('user_projects')
+            .select('hours_per_day')
+            .eq('user_id', user.id)
+            .eq('project_id', projectId)
+            .maybeSingle()
+          hpd = up?.hours_per_day ? Number(up.hours_per_day) : null
+        }
         if (hpd && hpd > 0) {
           nextTimeValue = hoursToDaysRaw(nextHours, hpd)
           nextTimeBlock = daysToTimeBlock(nextTimeValue)
@@ -516,19 +565,40 @@ export default function MyEntriesPage() {
             </div>
           )}
 
-          {otherWeeks.map((weekEnding) => (
-            <WeekCard
-              key={weekEnding}
-              weekEnding={weekEnding}
-              entries={weekGroups[weekEnding]}
-              expanded={expandedWeeks.has(weekEnding)}
-              onToggle={() => toggleWeek(weekEnding)}
-              onEdit={setEditingEntry}
-              onDelete={handleDelete}
-              onSubmit={handleSubmitWeek}
-              nonWorkingDays={nonWorkingDays}
-            />
-          ))}
+          {(() => {
+            const items = []
+            let prevMonth = null
+            otherWeeks.forEach((weekEnding) => {
+              const key = monthKey(weekEnding)
+              if (key !== prevMonth) {
+                const t = monthTotals[key]
+                items.push(
+                  <MonthHeader
+                    key={`month-${key}`}
+                    monthLabel={formatMonthLabel(key)}
+                    weekCount={t.weekCount}
+                    totalHours={Math.round(t.hoursRaw * 100) / 100}
+                    totalDays={roundDays(t.daysRaw)}
+                  />
+                )
+                prevMonth = key
+              }
+              items.push(
+                <WeekCard
+                  key={weekEnding}
+                  weekEnding={weekEnding}
+                  entries={weekGroups[weekEnding]}
+                  expanded={expandedWeeks.has(weekEnding)}
+                  onToggle={() => toggleWeek(weekEnding)}
+                  onEdit={setEditingEntry}
+                  onDelete={handleDelete}
+                  onSubmit={handleSubmitWeek}
+                  nonWorkingDays={nonWorkingDays}
+                />
+              )
+            })
+            return items
+          })()}
         </div>
       )}
 

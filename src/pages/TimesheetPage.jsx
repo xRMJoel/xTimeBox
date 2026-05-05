@@ -380,6 +380,9 @@ export default function TimesheetPage() {
             project_id: entry.project_id || '',
             status: entry.status,
             return_reason: entry.return_reason || null,
+            // Snapshot of hours_per_day at the time the entry was created.
+            // Used for optimistic days display on edits — see migration 018.
+            hours_per_day_snapshot: entry.hours_per_day_snapshot ?? null,
           })
         }
         setEntriesByDate(grouped)
@@ -435,19 +438,32 @@ export default function TimesheetPage() {
       // Don't allow editing submitted/signed_off entries
       if (entry?.status === 'signed_off' || entry?.status === 'submitted') return prev
       dayEntries[index] = { ...entry, [field]: value }
+      // Pick the rate that matches what the DB trigger will use on save.
+      //   Existing entry, project unchanged: locked snapshot from migration 018.
+      //   Existing entry, project changed:  new project's live user_projects rate
+      //                                     (the trigger refreshes the snapshot).
+      //   New entry:                        live user_projects rate.
+      function rateFor(e) {
+        const projectChanged = e._id && e._original && e.project_id !== (e._original.project_id || '')
+        if (e._id && !projectChanged && e.hours_per_day_snapshot) {
+          return Number(e.hours_per_day_snapshot)
+        }
+        const proj = userProjects.find((p) => p.id === e.project_id)
+        return proj?.hours_per_day ? Number(proj.hours_per_day) : null
+      }
       // If time_hours changed, recalculate raw (unrounded) time_value
       if (field === 'time_hours' && value) {
-        const proj = userProjects.find((p) => p.id === (dayEntries[index].project_id))
-        if (proj?.hours_per_day) {
-          dayEntries[index].time_value = hoursToDaysRaw(Number(value), proj.hours_per_day)
+        const hpd = rateFor(dayEntries[index])
+        if (hpd) {
+          dayEntries[index].time_value = hoursToDaysRaw(Number(value), hpd)
           dayEntries[index].time_block = daysToTimeBlock(dayEntries[index].time_value)
         }
       }
       // If project changed, recalculate raw time_value from hours with new rate
       if (field === 'project_id' && dayEntries[index].time_hours) {
-        const proj = userProjects.find((p) => p.id === value)
-        if (proj?.hours_per_day) {
-          dayEntries[index].time_value = hoursToDaysRaw(Number(dayEntries[index].time_hours), proj.hours_per_day)
+        const hpd = rateFor(dayEntries[index])
+        if (hpd) {
+          dayEntries[index].time_value = hoursToDaysRaw(Number(dayEntries[index].time_hours), hpd)
           dayEntries[index].time_block = daysToTimeBlock(dayEntries[index].time_value)
         }
       }
@@ -541,10 +557,15 @@ export default function TimesheetPage() {
               deletes.push(entry._id)
             }
           } else if (entry._id && isDirty(entry)) {
-            // Update this existing entry
+            // Update this existing entry. Mirror the trigger's rate logic:
+            // if the project hasn't changed, use the locked snapshot. If it
+            // has, use the new project's live rate (trigger will refresh).
             const proj = userProjects.find((p) => p.id === entry.project_id)
             const hrs = Number(entry.time_hours) || 0
-            const hpd = proj?.hours_per_day
+            const projectChanged = entry.project_id !== (entry._original?.project_id || '')
+            const hpd = (!projectChanged && entry.hours_per_day_snapshot)
+              ? Number(entry.hours_per_day_snapshot)
+              : (proj?.hours_per_day ? Number(proj.hours_per_day) : null)
             const rawDays = hpd ? hoursToDaysRaw(hrs, hpd) : entry.time_value
             const blockLabel = daysToTimeBlock(rawDays)
             updates.push({

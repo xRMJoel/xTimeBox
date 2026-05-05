@@ -2,7 +2,7 @@
 
 > **Purpose:** This file provides full project context for AI tools working on xTimeBox. Load this at the start of every session involving this codebase.
 >
-> **Last updated:** 2026-04-21 (UI now handles cross-month weeks where part of the week is signed off)
+> **Last updated:** 2026-05-05 (Per-entry hours_per_day snapshot; rate changes are no longer retrospective)
 >
 > **Owner:** Joel Abbott (Joel.Abbott@xrm365.co.uk)
 
@@ -91,7 +91,7 @@ xtimebox/
 - Auto-created via trigger on auth.users insert
 
 **timesheet_entries** — the main data table.
-- `id` (UUID), `user_id` (FK profiles), `project_id` (FK projects), `reference` (generated), `client`, `week_ending` (DATE, always a Friday), `day_name`, `entry_date` (DATE), `category`, `time_block` (legacy text), `time_value` (NUMERIC, days), `time_hours` (NUMERIC, hours logged by user), `feature_tag`, `notes`, `status` (entry_status enum), `created_at`, `updated_at`
+- `id` (UUID), `user_id` (FK profiles), `project_id` (FK projects), `reference` (generated), `client`, `week_ending` (DATE, always a Friday), `day_name`, `entry_date` (DATE), `category`, `time_block` (legacy text), `time_value` (NUMERIC, days), `time_hours` (NUMERIC, hours logged by user), `hours_per_day_snapshot` (NUMERIC, locked rate at entry-create time, used to derive days non-retrospectively), `feature_tag`, `notes`, `status` (entry_status enum), `created_at`, `updated_at`
 - Status enum: `draft`, `submitted`, `signed_off` (plus `returned` added in migration 004)
 
 **projects** — client projects that users log time against.
@@ -146,8 +146,10 @@ Migrations are numbered sequentially. The base schema is in `migration.sql`. All
 | 014 | Add `reason` column to `non_working_days` table |
 | 015 | Enforce `user_projects.hours_per_day` NOT NULL + CHECK > 0 |
 | 016 | Authoritative BEFORE INSERT/UPDATE trigger on `timesheet_entries` deriving `time_value` and `time_block` from `time_hours` and `user_projects.hours_per_day`, plus one-off self-heal pass |
+| 017 | Added `Managers and admins can delete any entry` RLS policy on `timesheet_entries` so admin clean-up of submitted/signed-off entries works |
+| 018 | Added `hours_per_day_snapshot` to `timesheet_entries`. Trigger now snapshots the rate on INSERT (and refreshes only when project_id/user_id changes), so rate changes on `user_projects.hours_per_day` are non-retrospective |
 
-**Next migration number:** 017
+**Next migration number:** 019
 
 ---
 
@@ -214,10 +216,12 @@ Time is logged in **hours**. The system converts hours to days using `hours_per_
 
 1. User enters hours (in 0.25-hour increments, validated by `isValidHourIncrement()`)
 2. Hours are stored in `time_hours` on the entry
-3. Days (`time_value`) and the `time_block` label are derived server-side by the `timesheet_entries_derive_days` trigger (migration 016). The frontend still calculates them for optimistic display, but the DB trigger is authoritative and overwrites whatever the caller supplies.
-4. `user_projects.hours_per_day` is NOT NULL with `CHECK > 0` (migration 015). The trigger raises if a rate can't be resolved on insert, or on an update that changes `time_hours`, `project_id`, or `user_id`. Status-only updates on orphaned historic entries are left alone.
-5. Weekly day totals are rounded UP to nearest 0.25 days (via `roundDays()`)
-6. `hours_per_day` is set per user-project assignment (e.g. 7.5 for a standard day)
+3. Days (`time_value`) and the `time_block` label are derived server-side by the `timesheet_entries_derive_days` trigger. The frontend still calculates them for optimistic display, but the DB trigger is authoritative and overwrites whatever the caller supplies.
+4. Each entry stores its own `hours_per_day_snapshot` (migration 018). The trigger sets it on INSERT from `user_projects.hours_per_day`, and refreshes it on UPDATE only when `project_id` or `user_id` changes. Edits that change just `time_hours` keep the original snapshot, so changing the rate on `user_projects` is non-retrospective: existing entries keep the rate they were saved against.
+5. To pick up a new rate on a historic entry, delete and re-create it. The AdminPage rate-change input surfaces a confirm modal stating this.
+6. `user_projects.hours_per_day` is NOT NULL with `CHECK > 0` (migration 015). The trigger raises if a rate can't be resolved when a snapshot needs to be set/refreshed.
+7. Weekly day totals are rounded UP to nearest 0.25 days (via `roundDays()`)
+8. `hours_per_day` is set per user-project assignment (e.g. 7.5 for a standard day)
 
 ### Key Functions (in constants.js)
 
@@ -337,7 +341,9 @@ These were identified in the code review and have been fixed. Listed here so AI 
 | generateReference used Math.random | Already uses crypto.getRandomValues (review was incorrect) | N/A |
 | `MyEntriesPage` edit flow left stale `time_value` after an hours change (e.g. 1hr showing as 1.07d) | Edit handler now recalculates `time_value`/`time_block` from `hours_per_day` before save, and a DB trigger recomputes authoritatively on every write | Migration 016 + MyEntriesPage change |
 | `user_projects.hours_per_day` was nullable | Enforced NOT NULL + CHECK > 0 so a user can't be assigned to a project without a valid rate | Migration 015 |
-| Cross-month weeks: when a week's early days were signed off with the prior month, the remaining days of the same week were unreachable from the UI (no "Edit week" link, week badge read as fully signed off) | `getWeekStatus` now returns `'mixed'` for partially signed-off weeks; `MyEntriesPage` `WeekCard` always shows "Edit week" on cross-month weeks; `TimesheetPage` shows a lock banner and relabels submit button to "Submit drafts" when any entry in the loaded week is signed off. DB layer was already correct (`sign_off_month` filters by `entry_date`). | MyEntriesPage + TimesheetPage + StatusBadge UI change (2026-04-21) |
+| Cross-month weeks: when a week's early days were signed off with the prior month, the remaining days of the same week were unreachable from the UI (no "Edit week" link, week badge read as fully signed off) | `getWeekStatus` now returns `'mixed'` for partially signed-off weeks; `MyEntriesPage` `WeekCard` always shows "Edit week" on cross-month weeks; `TimesheetPage` shows a lock banner and relabels submit button to "Submit drafts" when any entry in the loaded week is signed off. DB layer was already correct (`sign_off_month` filters by `entry_date`). | Commit b6d421f |
+| Admin could not delete a submitted/signed-off `timesheet_entries` row, e.g. an entry left over after a day was marked non-working. The only DELETE policy was the user-self draft/returned one, so admin deletes were silently rejected by RLS while the toast claimed success | Added a manager/admin DELETE policy on `timesheet_entries`. Hardened `deleteEntry` in `useEntries.js` to `.select()` the deleted row and throw if zero rows came back, so a future RLS block surfaces as a real error instead of a silent no-op | Migration 017 |
+| Changing `user_projects.hours_per_day` mid-project retroactively recomputed days on historic entries the next time they were touched (e.g. on sign-off), because the derive-days trigger always read the live rate. Rate increases/decreases were silently applied in arrears | Added `timesheet_entries.hours_per_day_snapshot`. Trigger snapshots the rate on INSERT and only refreshes it when `project_id`/`user_id` change. Plain edits and status-only updates keep the original snapshot, so rate changes only apply to entries created after the change. AdminPage rate input now defers save behind a confirm modal explaining the behaviour | Migration 018 |
 
 ---
 
